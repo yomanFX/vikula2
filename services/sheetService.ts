@@ -46,7 +46,7 @@ function doPost(e) {
 }
 */
 
-const SCRIPT_URL = ''; // <--- PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE
+const SCRIPT_URL = import.meta.env.VITE_SCRIPT_URL || ''; // <--- PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE
 const MOCK_MODE = SCRIPT_URL === '';
 
 // Mock Data for demonstration if no API is connected
