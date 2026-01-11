@@ -1,22 +1,12 @@
 <!DOCTYPE html>
 <html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Система Учета Претензий</title>
-    
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Chart.js for Graphs -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-    <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
-
-    <link rel="stylesheet" href="style.css">
-    
     <script>
       tailwind.config = {
         darkMode: 'class',
@@ -43,51 +33,89 @@
         }
       }
     </script>
+    <style>
+      body {
+        background-color: #f6f6f8;
+        -webkit-tap-highlight-color: transparent;
+      }
+      
+      /* Explicitly define the icon class to use the correct font family */
+      .material-symbols-outlined {
+        font-family: 'Material Symbols Outlined';
+        font-weight: normal;
+        font-style: normal;
+        font-size: 24px;
+        display: inline-block;
+        line-height: 1;
+        text-transform: none;
+        letter-spacing: normal;
+        word-wrap: normal;
+        white-space: nowrap;
+        direction: ltr;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+        -moz-osx-font-smoothing: grayscale;
+        font-feature-settings: 'liga';
+      }
+      
+      .font-variation-filled {
+        font-variation-settings: 'FILL' 1;
+      }
+
+      .gauge-container {
+          position: relative;
+          width: 200px;
+          height: 100px;
+          overflow: hidden;
+      }
+      .gauge-bg {
+          width: 200px;
+          height: 200px;
+          border-radius: 50%;
+          border: 20px solid #e5e7eb;
+          clip-path: inset(0 0 50% 0);
+      }
+      .gauge-fill {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 200px;
+          height: 200px;
+          border-radius: 50%;
+          border: 20px solid #2b6cee;
+          clip-path: inset(0 0 50% 0);
+          transform-origin: center;
+          transition: transform 1s ease-out;
+      }
+      .dark .gauge-bg {
+          border-color: #1f2937;
+      }
+      /* Hide scrollbar for Chrome, Safari and Opera */
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      /* Hide scrollbar for IE, Edge and Firefox */
+      .no-scrollbar {
+        -ms-overflow-style: none;  /* IE and Edge */
+        scrollbar-width: none;  /* Firefox */
+      }
+    </style>
 <script type="importmap">
 {
   "imports": {
     "react": "https://esm.sh/react@^19.2.3",
-    "react-router-dom": "https://esm.sh/react-router-dom@^7.12.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
     "react/": "https://esm.sh/react@^19.2.3/",
-    "recharts": "https://esm.sh/recharts@^3.6.0"
+    "react-router-dom": "https://esm.sh/react-router-dom@^7.12.0",
+    "recharts": "https://esm.sh/recharts@^3.6.0",
+    "vite": "https://esm.sh/vite@^7.3.1",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2"
   }
 }
 </script>
 </head>
-<body class="antialiased text-slate-900 bg-bg min-h-screen pb-24">
-
-    <!-- App Container -->
-    <div id="app" class="max-w-md mx-auto min-h-screen relative">
-        <!-- Content will be injected here by app.js -->
-    </div>
-
-    <!-- Bottom Navigation -->
-    <nav id="bottom-nav" class="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-gray-200 pb-safe pt-2 z-50 hidden">
-        <div class="max-w-md mx-auto flex justify-around items-center h-[70px] px-2">
-            <button onclick="router.navigate('home')" class="nav-btn flex flex-col items-center gap-1 w-16 text-gray-400" data-page="home">
-                <span class="material-symbols-outlined text-2xl">home</span>
-                <span class="text-[10px] font-medium">Главная</span>
-            </button>
-
-            <button onclick="router.navigate('feed')" class="nav-btn flex flex-col items-center gap-1 w-16 text-gray-400" data-page="feed">
-                <span class="material-symbols-outlined text-2xl">dynamic_feed</span>
-                <span class="text-[10px] font-medium">Лента</span>
-            </button>
-
-            <div class="-mt-8">
-                <button onclick="router.navigate('create_step1')" class="flex items-center justify-center size-14 rounded-full bg-primary text-white shadow-lg shadow-primary/40 ring-4 ring-white active:scale-95 transition-transform">
-                    <span class="material-symbols-outlined text-3xl">add</span>
-                </button>
-            </div>
-
-            <button onclick="router.navigate('profile')" class="nav-btn flex flex-col items-center gap-1 w-16 text-gray-400" data-page="profile">
-                <span class="material-symbols-outlined text-2xl">person</span>
-                <span class="text-[10px] font-medium">Профиль</span>
-            </button>
-        </div>
-    </nav>
-
-    <!-- Main Logic -->
-    <script src="app.js"></script>
-</body>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
 </html>
