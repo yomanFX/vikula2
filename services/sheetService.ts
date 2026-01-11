@@ -46,7 +46,7 @@ function doPost(e) {
 }
 */
 
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzb6VOmSiBbxIE5G5jxxKrGtAlDB3gF-HW1zqytV5cGbktg5W1f5xLKU3VnSLoBwhSf9Q/exec'; // <--- PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE
+const SCRIPT_URL = ''; // <--- PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE
 const MOCK_MODE = SCRIPT_URL === '';
 
 // Mock Data for demonstration if no API is connected
