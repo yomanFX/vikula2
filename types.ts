@@ -13,7 +13,19 @@ export enum ComplaintStatus {
   Approved = 'APPROVED',
   InProgress = 'IN PROGRESS',
   Compensated = 'COMPENSATED',
-  Completed = 'COMPLETED'
+  Completed = 'COMPLETED',
+  PendingApproval = 'PENDING_APPROVAL', // Waiting for the partner to rate it
+  // Appeal Statuses
+  PendingAppeal = 'PENDING_APPEAL', // In court, waiting for arguments
+  Annulled = 'ANNULLED', // Judge cancelled it
+  JudgedValid = 'JUDGED_VALID' // Judge upheld it
+}
+
+export interface AppealData {
+  plaintiffArg?: string; // The person appealing
+  defendantArg?: string; // The original author of the deed/complaint
+  judgeReasoning?: string;
+  isResolved: boolean;
 }
 
 export interface Complaint {
@@ -28,6 +40,8 @@ export interface Complaint {
   timestamp: string; // ISO string
   status: ComplaintStatus;
   points: number; // Negative for complaints, Positive for deeds
+  appeal?: AppealData; // New field for court data
+  image?: string; // Base64 compressed image
 }
 
 export interface KPI {

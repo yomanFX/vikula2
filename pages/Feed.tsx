@@ -1,15 +1,24 @@
 
 import React, { useEffect, useState } from 'react';
 import { Complaint, ComplaintStatus, UserType, ActivityType } from '../types';
-import { fetchComplaints } from '../services/sheetService';
+import { fetchComplaints, updateComplaintStatus } from '../services/sheetService';
 
 export const Feed: React.FC = () => {
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [filter, setFilter] = useState<'All' | UserType>('All');
 
   useEffect(() => {
+    // Standard fetch uses cache now
     fetchComplaints().then(setComplaints);
   }, []);
+
+  const handleAppeal = async (id: string) => {
+    if (confirm("Вы уверены, что хотите подать апелляцию в Суд? Это заморозит дело.")) {
+        await updateComplaintStatus(id, ComplaintStatus.PendingAppeal);
+        // Optimistic update
+        setComplaints(prev => prev.map(c => c.id === id ? { ...c, status: ComplaintStatus.PendingAppeal } : c));
+    }
+  };
 
   const filteredComplaints = filter === 'All' 
     ? complaints 
@@ -33,6 +42,30 @@ export const Feed: React.FC = () => {
             return (
                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-green-500/10 text-green-600 border border-green-500/20">
                      <span className="material-symbols-outlined text-sm">check_circle</span> Compensated
+                </span>
+            );
+        case ComplaintStatus.PendingAppeal:
+            return (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-500/10 text-purple-600 border border-purple-500/20 animate-pulse">
+                     <span className="material-symbols-outlined text-sm">gavel</span> В суде
+                </span>
+            );
+        case ComplaintStatus.Annulled:
+            return (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-gray-200 text-gray-500 border border-gray-300">
+                     <span className="material-symbols-outlined text-sm">block</span> Отменено
+                </span>
+            );
+        case ComplaintStatus.JudgedValid:
+             return (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-500/10 text-indigo-600 border border-indigo-500/20">
+                     <span className="material-symbols-outlined text-sm">balance</span> Суд подтвердил
+                </span>
+            );
+        case ComplaintStatus.PendingApproval:
+            return (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-600 border border-blue-500/20">
+                     <span className="material-symbols-outlined text-sm">hourglass_top</span> На проверке
                 </span>
             );
         default: return null;
@@ -92,15 +125,32 @@ export const Feed: React.FC = () => {
             )}
             {filteredComplaints.map(item => {
                 const isGoodDeed = item.type === ActivityType.GoodDeed;
+                // Can appeal if status is not already in court, annulled, or judged valid
+                const canAppeal = item.status !== ComplaintStatus.PendingAppeal 
+                                && item.status !== ComplaintStatus.Annulled 
+                                && item.status !== ComplaintStatus.JudgedValid
+                                && item.status !== ComplaintStatus.PendingApproval;
                 
                 return (
-                <div key={item.id} className={`rounded-xl p-4 shadow-sm border transition-all 
+                <div key={item.id} className={`rounded-xl p-4 shadow-sm border transition-all relative overflow-hidden
                     ${isGoodDeed 
                         ? 'bg-gradient-to-br from-white to-green-50 border-green-200 shadow-green-100/50 dark:from-slate-800 dark:to-green-900/20 dark:border-green-800' 
-                        : `bg-white dark:bg-slate-800 border-gray-100 dark:border-slate-700 ${item.status === ComplaintStatus.Compensated ? 'opacity-80 grayscale-[0.3]' : ''}`
+                        : `bg-white dark:bg-slate-800 border-gray-100 dark:border-slate-700 ${item.status === ComplaintStatus.Compensated || item.status === ComplaintStatus.Annulled ? 'opacity-80 grayscale-[0.3]' : ''}`
                     }`}>
                     
-                    <div className="flex items-start justify-between mb-3">
+                    {/* Court Badge/Stamp Overlay */}
+                    {item.status === ComplaintStatus.JudgedValid && (
+                         <div className="absolute -right-4 -top-2 rotate-12 opacity-10 pointer-events-none">
+                             <span className="material-symbols-outlined text-9xl text-indigo-600">balance</span>
+                         </div>
+                    )}
+                    {item.status === ComplaintStatus.Annulled && (
+                         <div className="absolute -right-4 -top-2 rotate-12 opacity-10 pointer-events-none">
+                             <span className="material-symbols-outlined text-9xl text-gray-600">cancel</span>
+                         </div>
+                    )}
+
+                    <div className="flex items-start justify-between mb-3 relative z-0">
                         <div className="flex items-center gap-3">
                             <div className={`size-10 rounded-full overflow-hidden border-2 shadow-sm ${isGoodDeed ? 'border-green-300' : 'border-white'}`}>
                                 <img src={`https://picsum.photos/seed/${item.user}/100`} alt={item.user} className="w-full h-full object-cover" />
@@ -115,17 +165,25 @@ export const Feed: React.FC = () => {
                         </div>
                         
                         {isGoodDeed ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-green-500 text-white shadow-lg shadow-green-500/20">
-                                <span className="material-symbols-outlined text-sm">volunteer_activism</span> +{item.points}
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${item.status === ComplaintStatus.Annulled ? 'bg-gray-200 text-gray-500' : item.status === ComplaintStatus.PendingApproval ? 'bg-blue-100 text-blue-500' : 'bg-green-500 text-white shadow-lg shadow-green-500/20'}`}>
+                                <span className="material-symbols-outlined text-sm">volunteer_activism</span> 
+                                {item.status === ComplaintStatus.Annulled ? '0' : item.status === ComplaintStatus.PendingApproval ? '...' : `+${item.points}`}
                             </span>
                         ) : getStatusBadge(item.status)}
                     </div>
                     
-                    <div className="mb-1">
+                    <div className="mb-3 relative z-0">
                         <h3 className={`text-base font-bold leading-snug mb-2 dark:text-white ${!isGoodDeed && item.status === ComplaintStatus.Compensated ? 'line-through text-gray-400' : ''}`}>
                             {isGoodDeed && <span className="mr-2">✨</span>}
                             {item.description}
                         </h3>
+                        
+                        {/* Image Preview in Feed */}
+                        {item.image && (
+                            <div className="w-full h-40 rounded-lg overflow-hidden border border-gray-100 dark:border-gray-700 mb-3">
+                                <img src={item.image} alt="proof" className="w-full h-full object-cover" />
+                            </div>
+                        )}
                         
                         {/* Compensation Block (Only for Complaints) */}
                         {!isGoodDeed && (
@@ -137,7 +195,7 @@ export const Feed: React.FC = () => {
                             </div>
                         )}
 
-                        {/* Good Deed Tag (Optional visual filler) */}
+                        {/* Good Deed Tag */}
                         {isGoodDeed && (
                             <div className="mt-2 flex">
                                 <span className="text-xs font-semibold text-green-600/80 bg-green-50 px-2 py-1 rounded-md border border-green-100 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800">
@@ -146,6 +204,19 @@ export const Feed: React.FC = () => {
                             </div>
                         )}
                     </div>
+
+                    {/* Appeal Action */}
+                    {canAppeal && (
+                        <div className="border-t border-gray-100 dark:border-slate-700 pt-3 flex justify-end">
+                            <button 
+                                onClick={() => handleAppeal(item.id)}
+                                className="text-xs font-bold text-gray-400 hover:text-primary flex items-center gap-1 transition-colors px-2 py-1 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800"
+                            >
+                                <span className="material-symbols-outlined text-base">balance</span>
+                                Апелляция
+                            </button>
+                        </div>
+                    )}
                 </div>
             )})}
         </div>

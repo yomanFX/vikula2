@@ -1,7 +1,8 @@
 
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { UserType, Complaint, ActivityType, ComplaintStatus, TIERS } from '../types';
-import { fetchComplaints, submitComplaint, calculateScore, updateComplaintStatus } from '../services/sheetService';
+import { fetchComplaints, calculateScore, updateComplaintStatus, updateComplaint } from '../services/sheetService';
 
 const Gauge: React.FC<{ score: number }> = ({ score }) => {
   const percentage = Math.min(100, Math.max(0, score / 10)); // 0 to 100
@@ -9,7 +10,6 @@ const Gauge: React.FC<{ score: number }> = ({ score }) => {
 
   return (
     <div className="relative flex flex-col items-center">
-      {/* Gauge Visual */}
       <div className="gauge-container mb-[-20px]">
         <div className="gauge-bg"></div>
         <div 
@@ -26,16 +26,16 @@ const Gauge: React.FC<{ score: number }> = ({ score }) => {
 };
 
 export const Profile: React.FC = () => {
+  const navigate = useNavigate();
   const [activeIdentity, setActiveIdentity] = useState<UserType>(() => {
     return (localStorage.getItem('currentUserIdentity') as UserType) || UserType.Vikulya;
   });
   const [activities, setActivities] = useState<Complaint[]>([]);
   const [score, setScore] = useState(500);
   
-  // Good Deed State
-  const [goodDeedPoints, setGoodDeedPoints] = useState<number | ''>(5);
-  const [goodDeedDescription, setGoodDeedDescription] = useState('');
-  const [isSubmittingDeed, setIsSubmittingDeed] = useState(false);
+  // Review Mode State
+  const [reviewItem, setReviewItem] = useState<Complaint | null>(null);
+  const [reviewPoints, setReviewPoints] = useState(15);
 
   useEffect(() => {
     localStorage.setItem('currentUserIdentity', activeIdentity);
@@ -43,6 +43,7 @@ export const Profile: React.FC = () => {
   }, [activeIdentity]);
 
   const loadData = async () => {
+    // Instant load from cache
     const data = await fetchComplaints();
     setActivities(data);
     setScore(calculateScore(data, activeIdentity));
@@ -52,66 +53,58 @@ export const Profile: React.FC = () => {
     setActiveIdentity(user);
   };
 
-  const handleAddGoodDeed = async () => {
-    if (!goodDeedDescription.trim()) {
-      alert("Пожалуйста, напишите, что вы сделали!");
-      return;
-    }
-    if (!goodDeedPoints || Number(goodDeedPoints) <= 0) {
-      alert("Укажите положительное количество баллов!");
-      return;
-    }
+  const openCreateGoodDeed = () => {
+      navigate('/create/step1', { state: { mode: 'good_deed' } });
+  };
 
-    setIsSubmittingDeed(true);
-    const newDeed: Complaint = {
-      id: Date.now().toString(),
-      user: activeIdentity, // The user doing the good deed gets the points
-      type: ActivityType.GoodDeed,
-      category: 'Доброе дело',
-      categoryIcon: '🌟',
-      description: goodDeedDescription.trim(),
-      compensation: '',
-      compensationIcon: '',
-      timestamp: new Date().toISOString(),
-      status: ComplaintStatus.Completed,
-      points: Number(goodDeedPoints)
-    };
+  const handleApproveDeed = async () => {
+      if (!reviewItem) return;
+      
+      const updatedItem: Complaint = {
+          ...reviewItem,
+          status: ComplaintStatus.Completed,
+          points: reviewPoints // Apply the rating
+      };
 
-    await submitComplaint(newDeed);
-    await loadData(); // Refresh score
-    
-    // Reset form
-    setIsSubmittingDeed(false);
-    setGoodDeedDescription('');
-    setGoodDeedPoints(5);
+      // Optimistic
+      const newActivities = activities.map(a => a.id === updatedItem.id ? updatedItem : a);
+      setActivities(newActivities);
+      
+      // Since this deed belongs to the OTHER person (reviewItem.user), it doesn't affect MY score immediately 
+      // unless I switch profiles. But logically it works.
+      
+      setReviewItem(null);
+      await updateComplaint(updatedItem);
   };
 
   const handleStatusUpdate = async (complaintId: string, newStatus: ComplaintStatus) => {
-    const success = await updateComplaintStatus(complaintId, newStatus);
-    if (success) {
-        await loadData();
-    } else {
-        alert("Ошибка при обновлении статуса");
-    }
+    const updatedActivities = activities.map(a => 
+        a.id === complaintId ? { ...a, status: newStatus } : a
+    );
+    setActivities(updatedActivities);
+    setScore(calculateScore(updatedActivities, activeIdentity));
+    await updateComplaintStatus(complaintId, newStatus);
   };
 
-  // Logic: Show complaints where I am the user (accused), and status is InProgress or Approved
+  // 1. Pending Complaints against ME (I need to apologize)
   const pendingComplaints = activities.filter(
     a => a.user === activeIdentity && 
     a.type === ActivityType.Complaint && 
     (a.status === ComplaintStatus.InProgress || a.status === ComplaintStatus.Approved)
   );
 
+  // 2. Good Deeds created by OTHER person waiting for MY approval
+  const incomingDeeds = activities.filter(
+      a => a.user !== activeIdentity && // Created by other
+      a.type === ActivityType.GoodDeed &&
+      a.status === ComplaintStatus.PendingApproval
+  );
+
   const getTierInfo = (s: number) => {
-      // Find the tier where score >= min. 
-      // Since array is sorted 0..1000, we reverse find or findLast, or just loop.
-      // Array is small.
       const t = TIERS.slice().reverse().find(t => s >= t.min);
       const currentTier = t || TIERS[0];
-      
       const nextTierIndex = TIERS.findIndex(x => x.min === currentTier.min) + 1;
       const nextTier = TIERS[nextTierIndex];
-      
       return { 
           current: currentTier, 
           nextMin: nextTier ? nextTier.min : 1000 
@@ -119,13 +112,13 @@ export const Profile: React.FC = () => {
   };
 
   const { current: tier, nextMin } = getTierInfo(score);
-  const progressPercent = Math.min(100, Math.max(0, ((score % 100) / 100) * 100)); // Progress within current 100 block
+  const progressPercent = Math.min(100, Math.max(0, ((score % 100) / 100) * 100));
 
   return (
-    <div className="max-w-[480px] mx-auto min-h-screen flex flex-col pb-24 bg-background-light dark:bg-background-dark text-[#111318] dark:text-white transition-colors duration-200">
+    <div className="max-w-[480px] mx-auto min-h-screen flex flex-col pb-24 bg-background-light dark:bg-background-dark text-[#111318] dark:text-white transition-colors duration-200 relative">
       
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md flex items-center p-4 justify-between border-b border-gray-200 dark:border-gray-800">
+      <header className="sticky top-0 z-40 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md flex items-center p-4 justify-between border-b border-gray-200 dark:border-gray-800">
         <div className="text-primary flex size-10 items-center justify-center rounded-full bg-primary/10">
           <span className="material-symbols-outlined">settings</span>
         </div>
@@ -180,76 +173,55 @@ export const Profile: React.FC = () => {
         </div>
       </div>
 
-      {/* Add Good Deed */}
-      <div className="px-4 pt-4">
-        <h3 className="text-lg font-bold leading-tight tracking-tight mb-4 flex items-center gap-2">
-            <span className="material-symbols-outlined text-green-500">verified_user</span>
-            Заслужить баллы
-        </h3>
-        <div className="bg-white dark:bg-gray-900 p-5 rounded-xl custom-shadow border border-gray-100 dark:border-gray-800">
-            {/* Description Input */}
-            <div className="mb-4">
-               <label className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase ml-1 mb-1 block">Что сделали?</label>
-               <input 
-                 type="text" 
-                 className="w-full p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 dark:text-white focus:bg-white dark:focus:bg-gray-900 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all"
-                 placeholder="Например: Помыл посуду"
-                 value={goodDeedDescription}
-                 onChange={e => setGoodDeedDescription(e.target.value)}
-               />
-            </div>
-
-            {/* Points Selection */}
-            <div className="mb-6">
-                <label className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase ml-1 mb-2 block">Оценка значимости</label>
-                <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                    {[5, 10, 15, 25, 50].map(pt => (
-                        <button key={pt} onClick={() => setGoodDeedPoints(pt)} className="flex-shrink-0 focus:outline-none">
-                            <div className={`size-10 flex items-center justify-center rounded-lg border transition-all font-bold ${goodDeedPoints === pt ? 'bg-primary text-white border-primary' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 dark:text-gray-300'}`}>
-                                {pt}
-                            </div>
-                        </button>
-                    ))}
-                    {/* Custom Points Input */}
-                    <div className="relative min-w-[70px]">
-                        <input 
-                            type="number" 
-                            placeholder="..." 
-                            value={goodDeedPoints === '' ? '' : goodDeedPoints}
-                            onChange={(e) => {
-                                const val = e.target.value;
-                                setGoodDeedPoints(val === '' ? '' : parseInt(val));
-                            }}
-                            className={`w-full h-10 rounded-lg border text-center font-bold outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all ${
-                                goodDeedPoints !== '' && ![5,10,15,25,50].includes(goodDeedPoints) 
-                                ? 'bg-primary text-white border-primary' 
-                                : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 dark:text-gray-300'
-                            }`}
-                        />
-                    </div>
-                </div>
-            </div>
-
-            <button 
-                onClick={handleAddGoodDeed}
-                disabled={isSubmittingDeed}
-                className="w-full bg-primary hover:bg-primary/90 text-white h-14 rounded-xl font-bold flex items-center justify-center gap-2 transition-transform active:scale-95 disabled:opacity-70 shadow-lg shadow-primary/20"
-            >
-                {isSubmittingDeed ? 'Отправка...' : (
-                    <>
-                        <span className="material-symbols-outlined">add_circle</span>
-                        Добавить доброе дело
-                    </>
-                )}
-            </button>
-        </div>
+      {/* Action: Add Good Deed */}
+      <div className="px-4 mb-6">
+        <button 
+            onClick={openCreateGoodDeed}
+            className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 h-14 rounded-xl font-bold flex items-center justify-center gap-2 text-green-600 dark:text-green-400 shadow-sm active:scale-95 transition-all"
+        >
+            <span className="material-symbols-outlined">add_a_photo</span>
+            Загрузить Доброе Дело
+        </button>
       </div>
 
-      {/* Pending Actions */}
-      <div className="px-4 pt-8">
+      {/* SECTION: Incoming Good Deeds (To Approve) */}
+      {incomingDeeds.length > 0 && (
+          <div className="px-4 pt-2 pb-6 animate-fadeIn">
+            <h3 className="text-lg font-bold leading-tight tracking-tight mb-4 flex items-center gap-2">
+                <span className="material-symbols-outlined text-green-500">rate_review</span>
+                На проверке ({incomingDeeds.length})
+            </h3>
+            <div className="space-y-3">
+                {incomingDeeds.map(deed => (
+                    <div key={deed.id} className="bg-white dark:bg-gray-900 p-4 rounded-xl border border-green-100 dark:border-green-900/30 shadow-sm flex items-center justify-between">
+                         <div className="flex items-center gap-3">
+                             {deed.image && (
+                                 <div className="size-12 rounded-lg bg-gray-100 overflow-hidden shrink-0 border border-gray-200">
+                                     <img src={deed.image} className="w-full h-full object-cover" />
+                                 </div>
+                             )}
+                             <div>
+                                 <p className="font-bold text-gray-900 dark:text-white text-sm">{deed.description}</p>
+                                 <p className="text-xs text-gray-500">{new Date(deed.timestamp).toLocaleDateString()}</p>
+                             </div>
+                         </div>
+                         <button 
+                            onClick={() => setReviewItem(deed)}
+                            className="bg-green-500 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-lg shadow-green-500/30"
+                         >
+                             Оценить
+                         </button>
+                    </div>
+                ))}
+            </div>
+          </div>
+      )}
+
+      {/* SECTION: Pending Complaints (To Pay) */}
+      <div className="px-4 pt-2">
         <h3 className="text-lg font-bold leading-tight tracking-tight mb-4 flex items-center gap-2">
             <span className="material-symbols-outlined text-orange-500">warning</span>
-            Ожидают внимания
+            Штрафы и долги
         </h3>
         <div className="space-y-4">
             {pendingComplaints.length === 0 && (
@@ -278,11 +250,15 @@ export const Profile: React.FC = () => {
                             {complaint.points} б.
                         </span>
                     </div>
+
+                    {/* Added: Image Preview for Complaints */}
+                    {complaint.image && (
+                        <div className="w-full h-32 rounded-lg overflow-hidden border border-gray-100 dark:border-gray-700 mb-3 bg-gray-50">
+                            <img src={complaint.image} alt="proof" className="w-full h-full object-cover" />
+                        </div>
+                    )}
                     
                     <div className="flex gap-2">
-                        {/* If status is IN_PROGRESS, allow Accept. If APPROVED, user already accepted, show Fixed only? 
-                            Let's keep both, but disable accept if already accepted. 
-                        */}
                         {complaint.status !== ComplaintStatus.Approved && (
                             <button 
                                 onClick={() => handleStatusUpdate(complaint.id, ComplaintStatus.Approved)} 
@@ -292,7 +268,6 @@ export const Profile: React.FC = () => {
                                 Принять
                             </button>
                         )}
-                        
                         <button 
                             onClick={() => handleStatusUpdate(complaint.id, ComplaintStatus.Compensated)} 
                             className="flex-1 h-10 rounded-lg bg-green-500 text-sm font-bold text-white hover:bg-green-600 transition-colors flex items-center justify-center gap-1 shadow-lg shadow-green-500/20"
@@ -305,6 +280,57 @@ export const Profile: React.FC = () => {
             ))}
         </div>
       </div>
+
+      {/* REVIEW MODAL */}
+      {reviewItem && (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fadeIn">
+              <div className="bg-white dark:bg-gray-900 w-full max-w-md rounded-2xl p-5 shadow-2xl animate-slideUp">
+                  <div className="flex justify-between items-center mb-4">
+                      <h3 className="font-bold text-lg dark:text-white">Оценка доброго дела</h3>
+                      <button onClick={() => setReviewItem(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200">
+                          <span className="material-symbols-outlined text-gray-600">close</span>
+                      </button>
+                  </div>
+                  
+                  {reviewItem.image && (
+                      <div className="w-full h-48 rounded-xl overflow-hidden mb-4 bg-gray-100 border">
+                          <img src={reviewItem.image} className="w-full h-full object-cover" />
+                      </div>
+                  )}
+
+                  <p className="text-gray-700 dark:text-gray-300 mb-6 text-sm bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
+                      "{reviewItem.description}"
+                  </p>
+
+                  <div className="mb-6">
+                      <div className="flex justify-between mb-2">
+                          <span className="text-xs font-bold uppercase text-gray-400">Награда</span>
+                          <span className="text-lg font-black text-primary">+{reviewPoints} баллов</span>
+                      </div>
+                      <input 
+                        type="range" 
+                        min="5" 
+                        max="100" 
+                        step="5" 
+                        value={reviewPoints}
+                        onChange={(e) => setReviewPoints(Number(e.target.value))}
+                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
+                      />
+                      <div className="flex justify-between text-[10px] text-gray-400 mt-1">
+                          <span>Мелочь (5)</span>
+                          <span>Подвиг (100)</span>
+                      </div>
+                  </div>
+
+                  <button 
+                    onClick={handleApproveDeed}
+                    className="w-full h-12 bg-green-500 text-white font-bold rounded-xl shadow-lg shadow-green-500/30 active:scale-95 transition-transform"
+                  >
+                      Подтвердить (+{reviewPoints})
+                  </button>
+              </div>
+          </div>
+      )}
     </div>
   );
 };
