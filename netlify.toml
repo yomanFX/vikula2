@@ -1,0 +1,6 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  VITE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzb6VOmSiBbxIE5G5jxxKrGtAlDB3gF-HW1zqytV5cGbktg5W1f5xLKU3VnSLoBwhSf9Q/exec"

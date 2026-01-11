@@ -1,7 +1,7 @@
 
 import { Complaint, ComplaintStatus, UserType, ActivityType } from '../types';
 
-const SCRIPT_URL = ''; // <--- PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE
+const SCRIPT_URL = import.meta.env.VITE_SCRIPT_URL || '';
 const MOCK_MODE = SCRIPT_URL === '';
 
 // Mock Data for demonstration if no API is connected
