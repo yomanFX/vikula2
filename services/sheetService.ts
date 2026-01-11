@@ -1,7 +1,7 @@
 
 import { Complaint, ComplaintStatus, UserType, ActivityType } from '../types';
 
-const SCRIPT_URL = ''; // <--- PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE
+const SCRIPT_URL = import.meta.env.VITE_SCRIPT_URL || '';
 const MOCK_MODE = SCRIPT_URL === '';
 
 // Mock Data for demonstration if no API is connected
@@ -89,24 +89,34 @@ export const submitComplaint = async (complaint: Complaint): Promise<boolean> =>
   }
 };
 
-export const updateComplaintStatus = async (id: string, newStatus: ComplaintStatus): Promise<boolean> => {
+export const updateComplaintStatus = async (complaint: Complaint): Promise<boolean> => {
     if (MOCK_MODE) {
         const current = localStorage.getItem('complaints');
         let all: Complaint[] = current ? JSON.parse(current) : MOCK_DATA;
         
-        const index = all.findIndex(c => c.id === id);
+        const index = all.findIndex(c => c.id === complaint.id);
         if (index !== -1) {
-            all[index].status = newStatus;
+            all[index] = complaint;
             localStorage.setItem('complaints', JSON.stringify(all));
             return true;
         }
         return false;
     }
     
-    // NOTE: For real Google Sheets implementation, you would need to implement an 'update' action 
-    // in the Apps Script or simply append a new row representing the update and filter in the frontend.
-    // For this demo, we assume the API handles it or we just return true.
-    return true; 
+    // We can reuse the 'submit' logic of our Google Apps Script, assuming it handles
+    // both creation and updates based on the provided 'id'.
+    try {
+        await fetch(SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(complaint),
+        });
+        return true;
+    } catch (error) {
+        console.error("Failed to post to Google Sheets", error);
+        return false;
+    }
 };
 
 export const calculateScore = (activities: Complaint[], user: UserType): number => {

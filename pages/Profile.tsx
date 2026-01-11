@@ -86,12 +86,22 @@ export const Profile: React.FC = () => {
     setGoodDeedPoints(5);
   };
 
-  const handleStatusUpdate = async (complaintId: string, newStatus: ComplaintStatus) => {
-    const success = await updateComplaintStatus(complaintId, newStatus);
-    if (success) {
-        await loadData();
-    } else {
-        alert("Ошибка при обновлении статуса");
+  const handleStatusUpdate = async (complaintToUpdate: Complaint, newStatus: ComplaintStatus) => {
+    // Optimistically update the UI for a responsive feel.
+    setActivities(currentActivities =>
+      currentActivities.map(c =>
+        c.id === complaintToUpdate.id ? { ...c, status: newStatus } : c
+      )
+    );
+
+    // Send the update to the backend in the background.
+    const updatedComplaint = { ...complaintToUpdate, status: newStatus };
+    const success = await updateComplaintStatus(updatedComplaint);
+
+    // If the backend fails, show an error and revert the change by reloading from the source.
+    if (!success) {
+      alert("Ошибка при обновлении статуса. Изменения не были сохранены.");
+      await loadData();
     }
   };
 
@@ -285,7 +295,7 @@ export const Profile: React.FC = () => {
                         */}
                         {complaint.status !== ComplaintStatus.Approved && (
                             <button 
-                                onClick={() => handleStatusUpdate(complaint.id, ComplaintStatus.Approved)} 
+                                onClick={() => handleStatusUpdate(complaint, ComplaintStatus.Approved)}
                                 className="flex-1 h-10 rounded-lg border border-gray-200 dark:border-gray-700 text-sm font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex items-center justify-center gap-1"
                             >
                                 <span className="material-symbols-outlined text-lg">check_small</span>
@@ -294,7 +304,7 @@ export const Profile: React.FC = () => {
                         )}
                         
                         <button 
-                            onClick={() => handleStatusUpdate(complaint.id, ComplaintStatus.Compensated)} 
+                            onClick={() => handleStatusUpdate(complaint, ComplaintStatus.Compensated)}
                             className="flex-1 h-10 rounded-lg bg-green-500 text-sm font-bold text-white hover:bg-green-600 transition-colors flex items-center justify-center gap-1 shadow-lg shadow-green-500/20"
                         >
                             <span className="material-symbols-outlined text-lg">done_all</span>
