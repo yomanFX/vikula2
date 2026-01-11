@@ -1,13 +1,9 @@
+
 import React, { useEffect, useState } from 'react';
-import { UserType, Complaint, ActivityType, ComplaintStatus } from '../types';
-import { fetchComplaints, submitComplaint, calculateScore } from '../services/sheetService';
+import { UserType, Complaint, ActivityType, ComplaintStatus, TIERS } from '../types';
+import { fetchComplaints, submitComplaint, calculateScore, updateComplaintStatus } from '../services/sheetService';
 
 const Gauge: React.FC<{ score: number }> = ({ score }) => {
-  // Score 0-1000.
-  // 0 points = -180deg rotation (or whatever visual mapping fits)
-  // Let's assume the visual works where 0deg is empty and 180deg is full.
-  // The provided CSS had `transform: rotate(135deg)` for 75%.
-  // So range is 0 to 180 degrees.
   const percentage = Math.min(100, Math.max(0, score / 10)); // 0 to 100
   const rotation = (percentage / 100) * 180; 
 
@@ -23,7 +19,7 @@ const Gauge: React.FC<{ score: number }> = ({ score }) => {
       </div>
       <div className="flex flex-col items-center z-10">
         <span className="text-4xl font-black text-primary font-display">{Math.round(score)}</span>
-        <p className="text-[#616f89] dark:text-gray-400 text-sm font-bold uppercase tracking-wider">Ваш рейтинг доверия</p>
+        <p className="text-[#616f89] dark:text-gray-400 text-sm font-bold uppercase tracking-wider">Ваш рейтинг</p>
       </div>
     </div>
   );
@@ -88,29 +84,42 @@ export const Profile: React.FC = () => {
     setIsSubmittingDeed(false);
     setGoodDeedDescription('');
     setGoodDeedPoints(5);
-    
-    alert(`Супер! +${newDeed.points} баллов начислено.`);
   };
 
-  const handleResolveComplaint = async (complaint: Complaint) => {
-    // Mark as compensated/fixed locally for demo (in real app would update row)
-    // For this demo, let's just create a "Compensated" entry or update logic would be needed in sheetService
-    // We will just alert for now as full CRUD is complex without ID matching in Sheets
-    alert("Статус обновлен!");
+  const handleStatusUpdate = async (complaintId: string, newStatus: ComplaintStatus) => {
+    const success = await updateComplaintStatus(complaintId, newStatus);
+    if (success) {
+        await loadData();
+    } else {
+        alert("Ошибка при обновлении статуса");
+    }
   };
 
+  // Logic: Show complaints where I am the user (accused), and status is InProgress or Approved
   const pendingComplaints = activities.filter(
-    a => a.user === activeIdentity && a.type === ActivityType.Complaint && a.status === ComplaintStatus.InProgress
+    a => a.user === activeIdentity && 
+    a.type === ActivityType.Complaint && 
+    (a.status === ComplaintStatus.InProgress || a.status === ComplaintStatus.Approved)
   );
 
-  const getTierName = (s: number) => {
-    if (s >= 900) return { name: "Святой", next: 1000, desc: "Вы просто ангел во плоти." };
-    if (s >= 750) return { name: "Надежный партнер", next: 900, desc: "Почти не косячит. Можно доверять." };
-    if (s >= 500) return { name: "Нормально", next: 750, desc: "Есть куда расти, но жить можно." };
-    return { name: "Токсик", next: 500, desc: "Срочно исправляйтесь!" };
+  const getTierInfo = (s: number) => {
+      // Find the tier where score >= min. 
+      // Since array is sorted 0..1000, we reverse find or findLast, or just loop.
+      // Array is small.
+      const t = TIERS.slice().reverse().find(t => s >= t.min);
+      const currentTier = t || TIERS[0];
+      
+      const nextTierIndex = TIERS.findIndex(x => x.min === currentTier.min) + 1;
+      const nextTier = TIERS[nextTierIndex];
+      
+      return { 
+          current: currentTier, 
+          nextMin: nextTier ? nextTier.min : 1000 
+      };
   };
 
-  const tier = getTierName(score);
+  const { current: tier, nextMin } = getTierInfo(score);
+  const progressPercent = Math.min(100, Math.max(0, ((score % 100) / 100) * 100)); // Progress within current 100 block
 
   return (
     <div className="max-w-[480px] mx-auto min-h-screen flex flex-col pb-24 bg-background-light dark:bg-background-dark text-[#111318] dark:text-white transition-colors duration-200">
@@ -151,14 +160,21 @@ export const Profile: React.FC = () => {
         <Gauge score={score} />
         
         <div className="w-full mt-8 p-4 bg-white dark:bg-gray-900 rounded-xl custom-shadow border border-gray-100 dark:border-gray-800">
-          <div className="flex justify-between items-end mb-2">
-            <span className="text-sm font-semibold text-gray-600 dark:text-gray-300">Прогресс до уровня "{tier.next === 1000 ? "Божество" : "Next Tier"}"</span>
-            <span className="text-xs font-bold text-primary">{Math.round((score / 1000) * 100)}%</span>
+          <div className="flex justify-between items-center mb-2">
+             <div className="flex flex-col">
+                <span className={`text-xl font-bold ${tier.color}`}>{tier.name}</span>
+                <span className="text-xs text-gray-400">Текущий статус</span>
+             </div>
+             <div className="text-right">
+                <span className="text-xs font-bold text-gray-400">Цель: {nextMin}</span>
+             </div>
           </div>
-          <div className="h-2.5 w-full bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-            <div className="h-full bg-primary rounded-full" style={{ width: `${(score/1000)*100}%` }}></div>
+          
+          <div className="h-2.5 w-full bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden mb-2">
+            <div className="h-full bg-primary rounded-full transition-all duration-700" style={{ width: `${progressPercent}%` }}></div>
           </div>
-          <p className="mt-3 text-sm text-[#616f89] dark:text-gray-400 leading-normal italic text-center">
+          
+          <p className="mt-2 text-sm text-[#616f89] dark:text-gray-400 leading-normal italic text-center">
              "{tier.desc}"
           </p>
         </div>
@@ -187,7 +203,7 @@ export const Profile: React.FC = () => {
             <div className="mb-6">
                 <label className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase ml-1 mb-2 block">Оценка значимости</label>
                 <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                    {[1, 3, 5, 10, 20].map(pt => (
+                    {[5, 10, 15, 25, 50].map(pt => (
                         <button key={pt} onClick={() => setGoodDeedPoints(pt)} className="flex-shrink-0 focus:outline-none">
                             <div className={`size-10 flex items-center justify-center rounded-lg border transition-all font-bold ${goodDeedPoints === pt ? 'bg-primary text-white border-primary' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 dark:text-gray-300'}`}>
                                 {pt}
@@ -205,14 +221,11 @@ export const Profile: React.FC = () => {
                                 setGoodDeedPoints(val === '' ? '' : parseInt(val));
                             }}
                             className={`w-full h-10 rounded-lg border text-center font-bold outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all ${
-                                goodDeedPoints !== '' && ![1,3,5,10,20].includes(goodDeedPoints) 
+                                goodDeedPoints !== '' && ![5,10,15,25,50].includes(goodDeedPoints) 
                                 ? 'bg-primary text-white border-primary' 
                                 : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 dark:text-gray-300'
                             }`}
                         />
-                         <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none text-gray-400 text-xs font-bold opacity-0 transition-opacity peer-placeholder-shown:opacity-100">
-                             ?
-                         </span>
                     </div>
                 </div>
             </div>
@@ -240,23 +253,51 @@ export const Profile: React.FC = () => {
         </h3>
         <div className="space-y-4">
             {pendingComplaints.length === 0 && (
-                <p className="text-gray-400 text-center italic text-sm">Вы чисты перед законом (пока что).</p>
+                <div className="text-center p-6 bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800">
+                     <span className="text-4xl block mb-2">🕊️</span>
+                     <p className="text-gray-400 italic text-sm">Ваша совесть чиста... пока что.</p>
+                </div>
             )}
             {pendingComplaints.map(complaint => (
                  <div key={complaint.id} className="bg-white dark:bg-gray-900 p-4 rounded-xl border border-orange-100 dark:border-orange-900/30 custom-shadow">
                     <div className="flex justify-between items-start mb-3">
                         <div>
-                            <p className="font-bold text-gray-800 dark:text-gray-100">{complaint.category}</p>
+                            <p className="font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                                {complaint.category} 
+                                {complaint.status === ComplaintStatus.Approved && (
+                                    <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">Признано</span>
+                                )}
+                            </p>
                             <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">{complaint.description}</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{new Date(complaint.timestamp).toLocaleString()}</p>
+                            <div className="flex items-center gap-1 mt-2 text-xs text-orange-600 bg-orange-50 w-fit px-2 py-1 rounded-lg">
+                                <span className="material-symbols-outlined text-sm">{complaint.compensationIcon}</span>
+                                <span className="font-semibold">Штраф: {complaint.compensation}</span>
+                            </div>
                         </div>
-                        <span className="px-2 py-1 bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 text-[10px] font-black rounded uppercase">{complaint.points} б.</span>
+                        <span className="px-2 py-1 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 text-[10px] font-black rounded uppercase shrink-0">
+                            {complaint.points} б.
+                        </span>
                     </div>
+                    
                     <div className="flex gap-2">
-                        <button onClick={() => handleResolveComplaint(complaint)} className="flex-1 h-9 rounded-lg border border-gray-200 dark:border-gray-700 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                            Принять
-                        </button>
-                        <button onClick={() => handleResolveComplaint(complaint)} className="flex-1 h-9 rounded-lg bg-primary text-sm font-semibold text-white hover:bg-primary/90 transition-colors">
+                        {/* If status is IN_PROGRESS, allow Accept. If APPROVED, user already accepted, show Fixed only? 
+                            Let's keep both, but disable accept if already accepted. 
+                        */}
+                        {complaint.status !== ComplaintStatus.Approved && (
+                            <button 
+                                onClick={() => handleStatusUpdate(complaint.id, ComplaintStatus.Approved)} 
+                                className="flex-1 h-10 rounded-lg border border-gray-200 dark:border-gray-700 text-sm font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex items-center justify-center gap-1"
+                            >
+                                <span className="material-symbols-outlined text-lg">check_small</span>
+                                Принять
+                            </button>
+                        )}
+                        
+                        <button 
+                            onClick={() => handleStatusUpdate(complaint.id, ComplaintStatus.Compensated)} 
+                            className="flex-1 h-10 rounded-lg bg-green-500 text-sm font-bold text-white hover:bg-green-600 transition-colors flex items-center justify-center gap-1 shadow-lg shadow-green-500/20"
+                        >
+                            <span className="material-symbols-outlined text-lg">done_all</span>
                             Исправлено
                         </button>
                     </div>

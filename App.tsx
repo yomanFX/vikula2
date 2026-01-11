@@ -1,8 +1,10 @@
+
 import React from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Home } from './pages/Home';
 import { Feed } from './pages/Feed';
 import { Profile } from './pages/Profile';
+import { Court } from './pages/Court';
 import { BottomNav } from './components/BottomNav';
 import { CreateComplaint } from './pages/CreateComplaint';
 
@@ -15,6 +17,7 @@ const App: React.FC = () => {
           <Route path="/" element={<Home />} />
           <Route path="/feed" element={<Feed />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/court" element={<Court />} />
           
           {/* Create Routes */}
           <Route path="/create/step1" element={<CreateComplaint />} />

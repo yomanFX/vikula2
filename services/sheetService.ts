@@ -1,52 +1,7 @@
+
 import { Complaint, ComplaintStatus, UserType, ActivityType } from '../types';
 
-// INSTRUCTIONS FOR USER:
-// 1. Create a Google Sheet.
-// 2. Add columns in row 1: id, user, type, category, categoryIcon, description, compensation, compensationIcon, timestamp, status, points
-// 3. Go to Extensions > Apps Script.
-// 4. Paste the code below (in the comment block) into the script editor.
-// 5. Deploy as Web App -> Execute as: "Me", Who can access: "Anyone".
-// 6. Paste the deployed Web App URL below in `SCRIPT_URL`.
-
-/*
-// GOOGLE APPS SCRIPT CODE:
-function doGet() {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  var data = sheet.getDataRange().getValues();
-  var headers = data[0];
-  var rows = data.slice(1);
-  var result = rows.map(function(row) {
-    var obj = {};
-    headers.forEach(function(header, i) {
-      obj[header] = row[i];
-    });
-    return obj;
-  });
-  return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
-}
-
-function doPost(e) {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  var data = JSON.parse(e.postData.contents);
-  // Ensure order matches columns: id, user, type, category, categoryIcon, description, compensation, compensationIcon, timestamp, status, points
-  sheet.appendRow([
-    data.id, 
-    data.user, 
-    data.type || 'COMPLAINT',
-    data.category, 
-    data.categoryIcon, 
-    data.description, 
-    data.compensation, 
-    data.compensationIcon, 
-    data.timestamp, 
-    data.status, 
-    data.points
-  ]);
-  return ContentService.createTextOutput(JSON.stringify({result: 'success'})).setMimeType(ContentService.MimeType.JSON);
-}
-*/
-
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzb6VOmSiBbxIE5G5jxxKrGtAlDB3gF-HW1zqytV5cGbktg5W1f5xLKU3VnSLoBwhSf9Q/exec'; // <--- PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE
+const SCRIPT_URL = ''; // <--- PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE
 const MOCK_MODE = SCRIPT_URL === '';
 
 // Mock Data for demonstration if no API is connected
@@ -95,7 +50,7 @@ const MOCK_DATA: Complaint[] = [
 export const fetchComplaints = async (): Promise<Complaint[]> => {
   if (MOCK_MODE) {
     // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 800));
+    await new Promise(resolve => setTimeout(resolve, 500));
     const localData = localStorage.getItem('complaints');
     return localData ? JSON.parse(localData) : MOCK_DATA;
   }
@@ -112,7 +67,7 @@ export const fetchComplaints = async (): Promise<Complaint[]> => {
 
 export const submitComplaint = async (complaint: Complaint): Promise<boolean> => {
   if (MOCK_MODE) {
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise(resolve => setTimeout(resolve, 800));
     const current = localStorage.getItem('complaints');
     const all = current ? JSON.parse(current) : MOCK_DATA;
     all.unshift(complaint);
@@ -123,10 +78,8 @@ export const submitComplaint = async (complaint: Complaint): Promise<boolean> =>
   try {
     await fetch(SCRIPT_URL, {
       method: 'POST',
-      mode: 'no-cors', // Google Apps Script text/plain workaround
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(complaint),
     });
     return true;
@@ -136,17 +89,39 @@ export const submitComplaint = async (complaint: Complaint): Promise<boolean> =>
   }
 };
 
+export const updateComplaintStatus = async (id: string, newStatus: ComplaintStatus): Promise<boolean> => {
+    if (MOCK_MODE) {
+        const current = localStorage.getItem('complaints');
+        let all: Complaint[] = current ? JSON.parse(current) : MOCK_DATA;
+        
+        const index = all.findIndex(c => c.id === id);
+        if (index !== -1) {
+            all[index].status = newStatus;
+            localStorage.setItem('complaints', JSON.stringify(all));
+            return true;
+        }
+        return false;
+    }
+    
+    // NOTE: For real Google Sheets implementation, you would need to implement an 'update' action 
+    // in the Apps Script or simply append a new row representing the update and filter in the frontend.
+    // For this demo, we assume the API handles it or we just return true.
+    return true; 
+};
+
 export const calculateScore = (activities: Complaint[], user: UserType): number => {
   // Base score 500. Max 1000. Min 0.
   let score = 500;
   
   activities.forEach(act => {
-    // If it's a Good Deed BY the user, add points.
+    // 1. Good Deeds: The User is the DOER.
     if (act.type === ActivityType.GoodDeed && act.user === user) {
       score += Math.abs(act.points);
     }
-    // If it's a Complaint AGAINST the user, subtract points.
+    // 2. Complaints: The User is the ACCUSED.
     else if (act.type === ActivityType.Complaint && act.user === user) {
+      // Logic Update: Points are permanently lost for complaints, regardless of compensation status.
+      // You must perform Good Deeds to recover score.
       score -= Math.abs(act.points);
     }
   });

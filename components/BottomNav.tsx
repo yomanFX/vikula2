@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -14,7 +15,7 @@ export const BottomNav: React.FC = () => {
       <div className="max-w-md mx-auto flex justify-around items-center h-[70px] px-2">
         <button 
           onClick={() => navigate('/')}
-          className={`flex flex-col items-center gap-1 w-16 ${path === '/' ? 'text-primary' : 'text-gray-400'}`}
+          className={`flex flex-col items-center gap-1 w-14 ${path === '/' ? 'text-primary' : 'text-gray-400'}`}
         >
           <span className={`material-symbols-outlined text-2xl ${path === '/' ? 'font-variation-filled' : ''}`}>home</span>
           <span className="text-[10px] font-medium">Главная</span>
@@ -22,7 +23,7 @@ export const BottomNav: React.FC = () => {
 
         <button 
           onClick={() => navigate('/feed')}
-          className={`flex flex-col items-center gap-1 w-16 ${path === '/feed' ? 'text-primary' : 'text-gray-400'}`}
+          className={`flex flex-col items-center gap-1 w-14 ${path === '/feed' ? 'text-primary' : 'text-gray-400'}`}
         >
           <span className="material-symbols-outlined text-2xl">dynamic_feed</span>
           <span className="text-[10px] font-medium">Лента</span>
@@ -39,10 +40,18 @@ export const BottomNav: React.FC = () => {
 
         <button 
           onClick={() => navigate('/profile')}
-          className={`flex flex-col items-center gap-1 w-16 ${path === '/profile' ? 'text-primary' : 'text-gray-400'}`}
+          className={`flex flex-col items-center gap-1 w-14 ${path === '/profile' ? 'text-primary' : 'text-gray-400'}`}
         >
           <span className="material-symbols-outlined text-2xl">person</span>
           <span className="text-[10px] font-medium">Профиль</span>
+        </button>
+
+        <button 
+          onClick={() => navigate('/court')}
+          className={`flex flex-col items-center gap-1 w-14 ${path === '/court' ? 'text-primary' : 'text-gray-400'}`}
+        >
+          <span className="material-symbols-outlined text-2xl">balance</span>
+          <span className="text-[10px] font-medium">Суд</span>
         </button>
       </div>
     </nav>

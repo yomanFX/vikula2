@@ -1,8 +1,9 @@
+
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
-import { UserType, Complaint } from '../types';
-import { fetchComplaints } from '../services/sheetService';
+import { UserType, Complaint, ActivityType, TIERS } from '../types';
+import { fetchComplaints, calculateScore } from '../services/sheetService';
 
 const ChartData = [
   { val: 10 }, { val: 12 }, { val: 8 }, { val: 14 }, { val: 11 }, { val: 15 }, { val: 14 }
@@ -11,16 +12,44 @@ const ChartData = [
 export const Home: React.FC = () => {
   const navigate = useNavigate();
   const [recentActivity, setRecentActivity] = useState<Complaint[]>([]);
+  const [vikulyaStats, setVikulyaStats] = useState({ score: 500, tier: TIERS[5] });
+  const [yanikStats, setYanikStats] = useState({ score: 500, tier: TIERS[5] });
 
   useEffect(() => {
     fetchComplaints().then(data => {
-      setRecentActivity(data.slice(0, 3));
+      setRecentActivity(data.slice(0, 5));
+      
+      // Calculate real stats
+      const vScore = calculateScore(data, UserType.Vikulya);
+      const yScore = calculateScore(data, UserType.Yanik);
+
+      setVikulyaStats({
+        score: vScore,
+        tier: TIERS.find(t => vScore >= t.min && (t.min + 100) > vScore) || TIERS[TIERS.length - 1]
+      });
+
+      setYanikStats({
+        score: yScore,
+        tier: TIERS.find(t => yScore >= t.min && (t.min + 100) > yScore) || TIERS[TIERS.length - 1]
+      });
     });
   }, []);
 
   const handleProfileSelect = (user: UserType) => {
     // Navigate to create flow with pre-selected user context (passed via state)
     navigate('/create/step1', { state: { accusedUser: user } });
+  };
+
+  const getScoreColor = (score: number) => {
+    if (score >= 800) return 'bg-green-500';
+    if (score >= 500) return 'bg-yellow-500';
+    return 'bg-red-500';
+  };
+
+  const getScoreTextColor = (score: number) => {
+      if (score >= 800) return 'text-green-500';
+      if (score >= 500) return 'text-yellow-600';
+      return 'text-red-500';
   };
 
   return (
@@ -31,7 +60,7 @@ export const Home: React.FC = () => {
             <span className="material-symbols-outlined">bar_chart</span>
         </div>
         <h1 className="text-lg font-bold">Система Учета Претензий</h1>
-        <button className="size-10 flex items-center justify-center">
+        <button className="size-10 flex items-center justify-center text-gray-400">
             <span className="material-symbols-outlined">settings</span>
         </button>
       </header>
@@ -42,8 +71,8 @@ export const Home: React.FC = () => {
             <div>
                 <p className="text-gray-500 text-sm font-medium">Претензий за неделю</p>
                 <div className="flex items-baseline gap-2 mt-1">
-                    <span className="text-4xl font-bold text-gray-900">14</span>
-                    <span className="text-green-500 text-sm font-bold">+5% KPI</span>
+                    <span className="text-4xl font-bold text-gray-900">{recentActivity.filter(x => x.type === ActivityType.Complaint).length}</span>
+                    <span className="text-red-500 text-sm font-bold">Активны</span>
                 </div>
             </div>
             <div className="h-10 w-20">
@@ -54,7 +83,7 @@ export const Home: React.FC = () => {
                 </ResponsiveContainer>
             </div>
         </div>
-        {/* Progress bar */}
+        {/* Progress bar - Just visual flair */}
         <div className="w-full bg-gray-100 rounded-full h-1.5 mt-4">
             <div className="bg-primary h-1.5 rounded-full" style={{ width: '65%' }}></div>
         </div>
@@ -74,15 +103,15 @@ export const Home: React.FC = () => {
                 <h3 className="font-bold text-lg">{UserType.Vikulya}</h3>
                 <p className="text-xs text-gray-400 mb-3">Индекс надежности</p>
                 <div className="w-full flex justify-between text-[10px] font-bold mb-1">
-                    <span className="text-primary">TIER A</span>
-                    <span className="text-primary">85%</span>
+                    <span className={getScoreTextColor(vikulyaStats.score)}>{vikulyaStats.tier.name.toUpperCase()}</span>
+                    <span className={getScoreTextColor(vikulyaStats.score)}>{Math.round(vikulyaStats.score / 10)}%</span>
                 </div>
-                <div className="w-full bg-gray-100 rounded-full h-1.5 mb-4">
-                    <div className="bg-green-500 h-1.5 rounded-full" style={{ width: '85%' }}></div>
+                <div className="w-full bg-gray-100 rounded-full h-1.5 mb-4 overflow-hidden">
+                    <div className={`h-1.5 rounded-full transition-all duration-1000 ${getScoreColor(vikulyaStats.score)}`} style={{ width: `${vikulyaStats.score / 10}%` }}></div>
                 </div>
                 <button 
                     onClick={() => handleProfileSelect(UserType.Vikulya)}
-                    className="w-full py-2.5 bg-primary text-white text-sm font-bold rounded-xl active:scale-95 transition-transform"
+                    className="w-full py-2.5 bg-primary text-white text-sm font-bold rounded-xl active:scale-95 transition-transform shadow-lg shadow-primary/20"
                 >
                     Жалоба
                 </button>
@@ -96,15 +125,15 @@ export const Home: React.FC = () => {
                 <h3 className="font-bold text-lg">{UserType.Yanik}</h3>
                 <p className="text-xs text-gray-400 mb-3">Индекс надежности</p>
                 <div className="w-full flex justify-between text-[10px] font-bold mb-1">
-                    <span className="text-red-500">CRITICAL</span>
-                    <span className="text-red-500">42%</span>
+                    <span className={getScoreTextColor(yanikStats.score)}>{yanikStats.tier.name.toUpperCase()}</span>
+                    <span className={getScoreTextColor(yanikStats.score)}>{Math.round(yanikStats.score / 10)}%</span>
                 </div>
-                <div className="w-full bg-gray-100 rounded-full h-1.5 mb-4">
-                    <div className="bg-red-500 h-1.5 rounded-full" style={{ width: '42%' }}></div>
+                <div className="w-full bg-gray-100 rounded-full h-1.5 mb-4 overflow-hidden">
+                    <div className={`h-1.5 rounded-full transition-all duration-1000 ${getScoreColor(yanikStats.score)}`} style={{ width: `${yanikStats.score / 10}%` }}></div>
                 </div>
                 <button 
                     onClick={() => handleProfileSelect(UserType.Yanik)}
-                    className="w-full py-2.5 bg-primary text-white text-sm font-bold rounded-xl active:scale-95 transition-transform"
+                    className="w-full py-2.5 bg-primary text-white text-sm font-bold rounded-xl active:scale-95 transition-transform shadow-lg shadow-primary/20"
                 >
                     Жалоба
                 </button>
@@ -116,20 +145,28 @@ export const Home: React.FC = () => {
       <div>
         <h2 className="text-lg font-bold text-gray-900 mb-4">Последняя активность</h2>
         <div className="flex flex-col gap-3">
-            {recentActivity.map(item => (
-                <div key={item.id} className="bg-white p-4 rounded-xl shadow-ios flex gap-4 items-center">
-                    <div className={`size-12 rounded-lg flex items-center justify-center shrink-0 ${item.points > 0 ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                        <span className="material-symbols-outlined">{item.points > 0 ? 'check_circle' : 'warning'}</span>
+            {recentActivity.map(item => {
+                // Determine title based on type. Good Deeds should show description, Complaints show category.
+                const title = item.type === ActivityType.GoodDeed ? item.description : item.category;
+                const isGood = item.points > 0;
+                
+                return (
+                    <div key={item.id} className="bg-white p-4 rounded-xl shadow-ios flex gap-4 items-center border border-gray-50">
+                        <div className={`size-12 rounded-lg flex items-center justify-center shrink-0 text-2xl ${isGood ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                            {item.categoryIcon}
+                        </div>
+                        <div className="flex-1">
+                            <h4 className="font-bold text-sm text-gray-900 line-clamp-1">{title}</h4>
+                            <p className="text-xs text-gray-500">
+                                {item.user} • {new Date(item.timestamp).toLocaleDateString()}
+                            </p>
+                        </div>
+                        <span className={`text-xs font-bold whitespace-nowrap ${isGood ? 'text-green-500' : 'text-red-500'}`}>
+                            {isGood ? '+' : ''}{item.points} PTS
+                        </span>
                     </div>
-                    <div className="flex-1">
-                        <h4 className="font-bold text-sm text-gray-900 line-clamp-1">{item.category}</h4>
-                        <p className="text-xs text-gray-500">{item.user} • {new Date(item.timestamp).getHours()}ч назад</p>
-                    </div>
-                    <span className={`text-xs font-bold ${item.points > 0 ? 'text-green-500' : 'text-red-500'}`}>
-                        {item.points > 0 ? '+' : ''}{item.points} PTS
-                    </span>
-                </div>
-            ))}
+                );
+            })}
         </div>
       </div>
     </div>

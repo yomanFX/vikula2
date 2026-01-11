@@ -1,3 +1,4 @@
+
 export enum UserType {
   Vikulya = 'Викуля',
   Yanik = 'Яник',
@@ -35,6 +36,27 @@ export interface KPI {
   yanikScore: number;
   weeklyGrowth: number;
 }
+
+export interface Tier {
+  min: number;
+  name: string;
+  desc: string;
+  color: string;
+}
+
+export const TIERS: Tier[] = [
+  { min: 0, name: 'Нуб', desc: 'Хуже некуда. Срочно исправляйся!', color: 'text-red-600' },
+  { min: 100, name: 'Токсик', desc: 'Душно, сложно, тяжело.', color: 'text-red-500' },
+  { min: 200, name: 'Душнила', desc: 'С тобой непросто.', color: 'text-orange-600' },
+  { min: 300, name: 'Нормис', desc: 'Ни рыба ни мясо.', color: 'text-orange-500' },
+  { min: 400, name: 'Старательный', desc: 'Ты пытаешься, это видно.', color: 'text-yellow-600' },
+  { min: 500, name: 'Зайка', desc: 'Комфортный уровень отношений.', color: 'text-yellow-500' },
+  { min: 600, name: 'Котик', desc: 'Мур-мур, все хорошо.', color: 'text-green-500' },
+  { min: 700, name: 'Краш', desc: 'Сердечко бьется чаще.', color: 'text-green-600' },
+  { min: 800, name: 'Легенда', desc: 'Пример для подражания.', color: 'text-blue-500' },
+  { min: 900, name: 'Идеал', desc: 'Ты существуешь вообще?', color: 'text-indigo-500' },
+  { min: 1000, name: 'Божество', desc: 'Google Standards Quality.', color: 'text-purple-600' },
+];
 
 export const CATEGORIES = [
   { id: 'late', label: 'Опоздание', icon: '⏰' },
