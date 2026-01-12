@@ -8,6 +8,7 @@ import { Court } from './pages/Court';
 import { BottomNav } from './components/BottomNav';
 import { CreateComplaint } from './pages/CreateComplaint';
 import { PinPad } from './components/PinPad';
+import { ComplaintProvider } from './context/ComplaintContext';
 
 // Using HashRouter for GitHub Pages compatibility
 const App: React.FC = () => {
@@ -18,23 +19,25 @@ const App: React.FC = () => {
   }
 
   return (
-    <Router>
-      <div className="antialiased text-slate-900 bg-bg min-h-screen">
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/feed" element={<Feed />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/court" element={<Court />} />
-          
-          {/* Create Routes */}
-          <Route path="/create/step1" element={<CreateComplaint />} />
-          <Route path="/create/step2" element={<CreateComplaint />} />
-          
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-        <BottomNav />
-      </div>
-    </Router>
+    <ComplaintProvider>
+      <Router>
+        <div className="antialiased text-slate-900 bg-bg min-h-screen">
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/feed" element={<Feed />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/court" element={<Court />} />
+            
+            {/* Create Routes */}
+            <Route path="/create/step1" element={<CreateComplaint />} />
+            <Route path="/create/step2" element={<CreateComplaint />} />
+            
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+          <BottomNav />
+        </div>
+      </Router>
+    </ComplaintProvider>
   );
 };
 

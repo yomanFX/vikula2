@@ -1,11 +1,12 @@
 
 import React, { useEffect, useState } from 'react';
-import { fetchComplaints, updateComplaint } from '../services/sheetService';
+import { updateComplaint } from '../services/sheetService';
 import { Complaint, ComplaintStatus, UserType, ActivityType } from '../types';
 import { judgeCase } from '../services/geminiService';
+import { useComplaints } from '../context/ComplaintContext';
 
 export const Court: React.FC = () => {
-  const [appeals, setAppeals] = useState<Complaint[]>([]);
+  const { complaints, refreshData } = useComplaints();
   const [currentUser, setCurrentUser] = useState<UserType>(() => {
     return (localStorage.getItem('currentUserIdentity') as UserType) || UserType.Vikulya;
   });
@@ -15,25 +16,16 @@ export const Court: React.FC = () => {
   const [activeCaseId, setActiveCaseId] = useState<string | null>(null);
   const [isJudging, setIsJudging] = useState(false);
 
-  useEffect(() => {
-    loadAppeals();
-  }, []);
-
-  const loadAppeals = async () => {
-    const all = await fetchComplaints();
-    const pending = all.filter(c => c.status === ComplaintStatus.PendingAppeal);
-    setAppeals(pending);
-  };
+  // Filter complaints locally from context
+  const appeals = complaints.filter(c => c.status === ComplaintStatus.PendingAppeal);
 
   const handleOpenCase = (c: Complaint) => {
     setActiveCaseId(c.id);
-    // Load existing drafts if any (mocking this, normally from DB)
     setPlaintiffText(c.appeal?.plaintiffArg || '');
     setDefendantText(c.appeal?.defendantArg || '');
   };
 
   const saveArguments = async (c: Complaint) => {
-      // Update local object to simulate saving progress
       const updated: Complaint = {
           ...c,
           appeal: {
@@ -44,6 +36,7 @@ export const Court: React.FC = () => {
           }
       };
       await updateComplaint(updated);
+      await refreshData();
       alert("Аргументы сохранены.");
   };
 
@@ -83,12 +76,12 @@ export const Court: React.FC = () => {
     await updateComplaint(resolvedComplaint);
     setIsJudging(false);
     setActiveCaseId(null);
-    loadAppeals(); // Refresh list
+    await refreshData();
     alert(`Суд постановил: ${verdict.decision === 'cancel' ? 'ОТМЕНИТЬ' : 'ОСТАВИТЬ'}!`);
   };
 
   return (
-    <div className="min-h-screen bg-bg dark:bg-slate-900 pb-24 flex flex-col items-center">
+    <div className="min-h-screen bg-bg dark:bg-slate-900 pb-24 flex flex-col items-center pt-safe-top">
       {/* Header */}
       <div className="w-full bg-white dark:bg-slate-800 p-6 shadow-sm border-b border-indigo-100 dark:border-indigo-900/50 text-center relative overflow-hidden">
          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-400 via-purple-500 to-indigo-400"></div>

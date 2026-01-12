@@ -4,10 +4,12 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { CATEGORIES, COMPENSATIONS, UserType, Complaint, ComplaintStatus, ActivityType } from '../types';
 import { submitComplaint } from '../services/sheetService';
 import { compressImage } from '../services/imageService';
+import { useComplaints } from '../context/ComplaintContext';
 
 export const CreateComplaint: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { refreshData } = useComplaints();
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -32,6 +34,9 @@ export const CreateComplaint: React.FC = () => {
   const [compensation, setCompensation] = useState<typeof COMPENSATIONS[0] | null>(null);
   const [customCompensation, setCustomCompensation] = useState('');
   const [customCompEmoji, setCustomCompEmoji] = useState('');
+  
+  // New state for penalty points
+  const [penaltyPoints, setPenaltyPoints] = useState(10);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
@@ -76,6 +81,7 @@ export const CreateComplaint: React.FC = () => {
              image: image || undefined
           };
           await submitComplaint(newComplaint);
+          await refreshData();
           setIsSubmitting(false);
           navigate('/profile'); // Go back to profile
           return;
@@ -110,18 +116,20 @@ export const CreateComplaint: React.FC = () => {
          compensationIcon: finalCompIcon,
          timestamp: new Date().toISOString(),
          status: ComplaintStatus.InProgress,
-         points: -10,
-         image: image || undefined // <--- ADDED: Save image for complaints
+         // Use the negative value of the slider
+         points: -Math.abs(penaltyPoints),
+         image: image || undefined
        };
 
        await submitComplaint(newComplaint);
+       await refreshData();
        setIsSubmitting(false);
        navigate('/feed');
     }
   };
 
   return (
-    <div className="min-h-screen bg-white flex flex-col max-w-md mx-auto relative">
+    <div className="min-h-screen bg-white flex flex-col max-w-md mx-auto relative pt-safe-top">
       {/* Top Bar */}
       <div className="sticky top-0 z-10 flex items-center bg-white/80 backdrop-blur-md p-4 border-b border-gray-100">
         <button onClick={() => step === 1 ? navigate('/') : setStep(step - 1)} className="text-gray-900 flex size-10 items-center justify-start">
@@ -232,9 +240,37 @@ export const CreateComplaint: React.FC = () => {
 
         {step === 2 && !isGoodDeedMode && (
             <>
-                <div className="text-center mb-8 px-4">
+                <div className="text-center mb-6 px-4">
                     <h2 className="text-[28px] font-bold mb-2">Компенсация</h2>
                     <p className="text-gray-500">Цена прощения</p>
+                </div>
+
+                {/* PENALTY SLIDER */}
+                <div className="px-4 mb-8">
+                    <div className="bg-white p-4 rounded-xl shadow-ios border border-red-100">
+                        <div className="flex justify-between items-end mb-4">
+                             <div>
+                                <h3 className="font-bold text-gray-800">Уровень штрафа</h3>
+                                <p className="text-xs text-gray-400">Насколько сильно накосячено?</p>
+                             </div>
+                             <span className="text-2xl font-black text-red-500">
+                                 -{penaltyPoints}
+                             </span>
+                        </div>
+                        <input 
+                            type="range" 
+                            min="5" 
+                            max="100" 
+                            step="5" 
+                            value={penaltyPoints}
+                            onChange={(e) => setPenaltyPoints(Number(e.target.value))}
+                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-red-500"
+                        />
+                        <div className="flex justify-between text-[10px] text-gray-400 mt-2 font-bold">
+                            <span>Мелочь (-5)</span>
+                            <span>Катастрофа (-100)</span>
+                        </div>
+                    </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 px-4 mb-8">
@@ -284,7 +320,7 @@ export const CreateComplaint: React.FC = () => {
       </div>
 
       {/* Bottom Fixed Button */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 backdrop-blur-lg border-t border-gray-100 flex justify-center z-20">
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 backdrop-blur-lg border-t border-gray-100 flex justify-center z-20 pb-safe">
         <button 
             onClick={handleNext}
             disabled={isSubmitting}

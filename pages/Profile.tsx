@@ -2,7 +2,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { UserType, Complaint, ActivityType, ComplaintStatus, TIERS } from '../types';
-import { fetchComplaints, calculateScore, updateComplaintStatus, updateComplaint } from '../services/sheetService';
+import { updateComplaintStatus, updateComplaint } from '../services/sheetService';
+import { useComplaints } from '../context/ComplaintContext';
 
 const Gauge: React.FC<{ score: number }> = ({ score }) => {
   const percentage = Math.min(100, Math.max(0, score / 10)); // 0 to 100
@@ -27,11 +28,11 @@ const Gauge: React.FC<{ score: number }> = ({ score }) => {
 
 export const Profile: React.FC = () => {
   const navigate = useNavigate();
+  const { complaints, refreshData, vikulyaStats, yanikStats } = useComplaints();
+  
   const [activeIdentity, setActiveIdentity] = useState<UserType>(() => {
     return (localStorage.getItem('currentUserIdentity') as UserType) || UserType.Vikulya;
   });
-  const [activities, setActivities] = useState<Complaint[]>([]);
-  const [score, setScore] = useState(500);
   
   // Review Mode State
   const [reviewItem, setReviewItem] = useState<Complaint | null>(null);
@@ -39,15 +40,9 @@ export const Profile: React.FC = () => {
 
   useEffect(() => {
     localStorage.setItem('currentUserIdentity', activeIdentity);
-    loadData();
   }, [activeIdentity]);
 
-  const loadData = async () => {
-    // Instant load from cache
-    const data = await fetchComplaints();
-    setActivities(data);
-    setScore(calculateScore(data, activeIdentity));
-  };
+  const score = activeIdentity === UserType.Vikulya ? vikulyaStats.score : yanikStats.score;
 
   const handleIdentityChange = (user: UserType) => {
     setActiveIdentity(user);
@@ -63,39 +58,29 @@ export const Profile: React.FC = () => {
       const updatedItem: Complaint = {
           ...reviewItem,
           status: ComplaintStatus.Completed,
-          points: reviewPoints // Apply the rating
+          points: reviewPoints
       };
-
-      // Optimistic
-      const newActivities = activities.map(a => a.id === updatedItem.id ? updatedItem : a);
-      setActivities(newActivities);
-      
-      // Since this deed belongs to the OTHER person (reviewItem.user), it doesn't affect MY score immediately 
-      // unless I switch profiles. But logically it works.
       
       setReviewItem(null);
       await updateComplaint(updatedItem);
+      refreshData();
   };
 
   const handleStatusUpdate = async (complaintId: string, newStatus: ComplaintStatus) => {
-    const updatedActivities = activities.map(a => 
-        a.id === complaintId ? { ...a, status: newStatus } : a
-    );
-    setActivities(updatedActivities);
-    setScore(calculateScore(updatedActivities, activeIdentity));
     await updateComplaintStatus(complaintId, newStatus);
+    refreshData();
   };
 
   // 1. Pending Complaints against ME (I need to apologize)
-  const pendingComplaints = activities.filter(
+  const pendingComplaints = complaints.filter(
     a => a.user === activeIdentity && 
     a.type === ActivityType.Complaint && 
     (a.status === ComplaintStatus.InProgress || a.status === ComplaintStatus.Approved)
   );
 
   // 2. Good Deeds created by OTHER person waiting for MY approval
-  const incomingDeeds = activities.filter(
-      a => a.user !== activeIdentity && // Created by other
+  const incomingDeeds = complaints.filter(
+      a => a.user !== activeIdentity && 
       a.type === ActivityType.GoodDeed &&
       a.status === ComplaintStatus.PendingApproval
   );
@@ -115,7 +100,7 @@ export const Profile: React.FC = () => {
   const progressPercent = Math.min(100, Math.max(0, ((score % 100) / 100) * 100));
 
   return (
-    <div className="max-w-[480px] mx-auto min-h-screen flex flex-col pb-24 bg-background-light dark:bg-background-dark text-[#111318] dark:text-white transition-colors duration-200 relative">
+    <div className="max-w-[480px] mx-auto min-h-screen flex flex-col pb-24 bg-background-light dark:bg-background-dark text-[#111318] dark:text-white transition-colors duration-200 relative pt-safe-top">
       
       {/* Header */}
       <header className="sticky top-0 z-40 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md flex items-center p-4 justify-between border-b border-gray-200 dark:border-gray-800">
@@ -251,7 +236,7 @@ export const Profile: React.FC = () => {
                         </span>
                     </div>
 
-                    {/* Added: Image Preview for Complaints */}
+                    {/* Image Preview for Complaints */}
                     {complaint.image && (
                         <div className="w-full h-32 rounded-lg overflow-hidden border border-gray-100 dark:border-gray-700 mb-3 bg-gray-50">
                             <img src={complaint.image} alt="proof" className="w-full h-full object-cover" />
@@ -284,7 +269,7 @@ export const Profile: React.FC = () => {
       {/* REVIEW MODAL */}
       {reviewItem && (
           <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fadeIn">
-              <div className="bg-white dark:bg-gray-900 w-full max-w-md rounded-2xl p-5 shadow-2xl animate-slideUp">
+              <div className="bg-white dark:bg-gray-900 w-full max-w-md rounded-2xl p-5 shadow-2xl animate-slideUp mb-safe">
                   <div className="flex justify-between items-center mb-4">
                       <h3 className="font-bold text-lg dark:text-white">Оценка доброго дела</h3>
                       <button onClick={() => setReviewItem(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200">

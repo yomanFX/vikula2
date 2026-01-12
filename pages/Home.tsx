@@ -1,9 +1,9 @@
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
-import { UserType, Complaint, ActivityType, TIERS } from '../types';
-import { fetchComplaints, calculateScore } from '../services/sheetService';
+import { UserType, ActivityType } from '../types';
+import { useComplaints } from '../context/ComplaintContext';
 
 const ChartData = [
   { val: 10 }, { val: 12 }, { val: 8 }, { val: 14 }, { val: 11 }, { val: 15 }, { val: 14 }
@@ -11,32 +11,12 @@ const ChartData = [
 
 export const Home: React.FC = () => {
   const navigate = useNavigate();
-  const [recentActivity, setRecentActivity] = useState<Complaint[]>([]);
-  const [vikulyaStats, setVikulyaStats] = useState({ score: 500, tier: TIERS[5] });
-  const [yanikStats, setYanikStats] = useState({ score: 500, tier: TIERS[5] });
+  const { complaints, vikulyaStats, yanikStats, loading } = useComplaints();
 
-  useEffect(() => {
-    fetchComplaints().then(data => {
-      setRecentActivity(data.slice(0, 5));
-      
-      // Calculate real stats
-      const vScore = calculateScore(data, UserType.Vikulya);
-      const yScore = calculateScore(data, UserType.Yanik);
-
-      setVikulyaStats({
-        score: vScore,
-        tier: TIERS.find(t => vScore >= t.min && (t.min + 100) > vScore) || TIERS[TIERS.length - 1]
-      });
-
-      setYanikStats({
-        score: yScore,
-        tier: TIERS.find(t => yScore >= t.min && (t.min + 100) > yScore) || TIERS[TIERS.length - 1]
-      });
-    });
-  }, []);
+  // Get first 5 from context
+  const recentActivity = complaints.slice(0, 5);
 
   const handleProfileSelect = (user: UserType) => {
-    // Navigate to create flow with pre-selected user context (passed via state)
     navigate('/create/step1', { state: { accusedUser: user } });
   };
 
@@ -52,10 +32,18 @@ export const Home: React.FC = () => {
       return 'text-red-500';
   };
 
+  if (loading) {
+      return (
+          <div className="min-h-screen flex items-center justify-center">
+              <span className="material-symbols-outlined animate-spin text-primary text-4xl">refresh</span>
+          </div>
+      );
+  }
+
   return (
-    <div className="pb-24 pt-4 px-4 max-w-md mx-auto">
+    <div className="pb-24 pt-4 px-4 max-w-md mx-auto animate-fadeIn">
       {/* Header */}
-      <header className="flex justify-between items-center mb-6">
+      <header className="flex justify-between items-center mb-6 pt-safe-top">
         <div className="size-10 bg-primary/10 rounded-lg flex items-center justify-center text-primary">
             <span className="material-symbols-outlined">bar_chart</span>
         </div>
@@ -83,7 +71,6 @@ export const Home: React.FC = () => {
                 </ResponsiveContainer>
             </div>
         </div>
-        {/* Progress bar - Just visual flair */}
         <div className="w-full bg-gray-100 rounded-full h-1.5 mt-4">
             <div className="bg-primary h-1.5 rounded-full" style={{ width: '65%' }}></div>
         </div>
@@ -146,7 +133,6 @@ export const Home: React.FC = () => {
         <h2 className="text-lg font-bold text-gray-900 mb-4">Последняя активность</h2>
         <div className="flex flex-col gap-3">
             {recentActivity.map(item => {
-                // Determine title based on type. Good Deeds should show description, Complaints show category.
                 const title = item.type === ActivityType.GoodDeed ? item.description : item.category;
                 const isGood = item.points > 0;
                 

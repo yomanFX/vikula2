@@ -1,22 +1,29 @@
 
-import React, { useEffect, useState } from 'react';
-import { Complaint, ComplaintStatus, UserType, ActivityType } from '../types';
-import { fetchComplaints, updateComplaintStatus } from '../services/sheetService';
+import React, { useState } from 'react';
+import { ComplaintStatus, UserType, ActivityType } from '../types';
+import { updateComplaintStatus } from '../services/sheetService';
+import { useComplaints } from '../context/ComplaintContext';
 
 export const Feed: React.FC = () => {
-  const [complaints, setComplaints] = useState<Complaint[]>([]);
+  const { complaints, refreshData } = useComplaints();
   const [filter, setFilter] = useState<'All' | UserType>('All');
-
-  useEffect(() => {
-    // Standard fetch uses cache now
-    fetchComplaints().then(setComplaints);
-  }, []);
+  const [appealingId, setAppealingId] = useState<string | null>(null);
 
   const handleAppeal = async (id: string) => {
-    if (confirm("Вы уверены, что хотите подать апелляцию в Суд? Это заморозит дело.")) {
-        await updateComplaintStatus(id, ComplaintStatus.PendingAppeal);
-        // Optimistic update
-        setComplaints(prev => prev.map(c => c.id === id ? { ...c, status: ComplaintStatus.PendingAppeal } : c));
+    if (!confirm("Вы уверены, что хотите подать апелляцию в Суд? Это заморозит дело.")) return;
+
+    setAppealingId(id);
+    try {
+        const success = await updateComplaintStatus(id, ComplaintStatus.PendingAppeal);
+        if (success) {
+            await refreshData();
+        } else {
+            alert("Ошибка при подаче апелляции. Проверьте консоль и убедитесь, что в базе данных есть колонка 'appeal' (jsonb).");
+        }
+    } catch (e) {
+        alert("Произошла непредвиденная ошибка.");
+    } finally {
+        setAppealingId(null);
     }
   };
 
@@ -73,7 +80,7 @@ export const Feed: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-bg dark:bg-slate-900 pb-24">
+    <div className="min-h-screen bg-bg dark:bg-slate-900 pb-24 pt-safe-top">
       {/* Header */}
       <header className="sticky top-0 z-10 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-gray-200 dark:border-slate-800">
         <div className="flex items-center justify-between px-4 py-3 max-w-md mx-auto">
@@ -81,8 +88,11 @@ export const Feed: React.FC = () => {
                 <span className="material-symbols-outlined text-primary">gavel</span>
                 <h1 className="text-xl font-bold tracking-tight dark:text-white">Лента событий</h1>
             </div>
-            <button className="size-10 rounded-full bg-gray-100 dark:bg-slate-800 flex items-center justify-center">
-                <span className="material-symbols-outlined text-gray-600 dark:text-gray-300">more_horiz</span>
+            <button 
+                onClick={() => refreshData()}
+                className="size-10 rounded-full bg-gray-100 dark:bg-slate-800 flex items-center justify-center active:bg-gray-200"
+            >
+                <span className="material-symbols-outlined text-gray-600 dark:text-gray-300">refresh</span>
             </button>
         </div>
       </header>
@@ -210,10 +220,13 @@ export const Feed: React.FC = () => {
                         <div className="border-t border-gray-100 dark:border-slate-700 pt-3 flex justify-end">
                             <button 
                                 onClick={() => handleAppeal(item.id)}
-                                className="text-xs font-bold text-gray-400 hover:text-primary flex items-center gap-1 transition-colors px-2 py-1 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800"
+                                disabled={appealingId === item.id}
+                                className="text-xs font-bold text-gray-400 hover:text-primary flex items-center gap-1 transition-colors px-2 py-1 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50"
                             >
-                                <span className="material-symbols-outlined text-base">balance</span>
-                                Апелляция
+                                <span className={`material-symbols-outlined text-base ${appealingId === item.id ? 'animate-spin' : ''}`}>
+                                    {appealingId === item.id ? 'refresh' : 'balance'}
+                                </span>
+                                {appealingId === item.id ? 'Загрузка...' : 'Апелляция'}
                             </button>
                         </div>
                     )}
@@ -224,3 +237,4 @@ export const Feed: React.FC = () => {
     </div>
   );
 };
+    
