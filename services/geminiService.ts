@@ -1,32 +1,5 @@
 
-import { GoogleGenAI, FunctionDeclaration, Type } from "@google/genai";
-import { Complaint, AppealData } from "../types";
-
-// NOTE: In a real build, this comes from process.env.API_KEY. 
-// Ensuring it is accessed safely.
-const apiKey = process.env.API_KEY || '';
-
-const ai = new GoogleGenAI({ apiKey });
-
-const rulingTool: FunctionDeclaration = {
-  name: 'makeRuling',
-  description: 'Issue a final binding judgment on the family dispute.',
-  parameters: {
-    type: Type.OBJECT,
-    properties: {
-      decision: {
-        type: Type.STRING,
-        enum: ['cancel', 'keep'],
-        description: 'Whether to cancel (annul) the activity/complaint or keep it (uphold it).'
-      },
-      explanation: {
-        type: Type.STRING,
-        description: 'A witty, slightly sarcastic, but fair explanation of the ruling.'
-      }
-    },
-    required: ['decision', 'explanation']
-  }
-};
+import { Complaint } from "../types";
 
 export interface JudgeResult {
   decision: 'cancel' | 'keep';
@@ -34,57 +7,43 @@ export interface JudgeResult {
 }
 
 export const judgeCase = async (complaint: Complaint): Promise<JudgeResult> => {
-  if (!complaint.appeal) throw new Error("No appeal data");
-
-  const prompt = `
-    You are the "Family Supreme Court Judge" for a couple, Vikulya and Yanik.
-    Your job is to resolve a dispute about a specific "Activity" logged in their relationship app.
-    
-    The Activity:
-    Type: ${complaint.type}
-    Category: ${complaint.category}
-    Description: "${complaint.description}"
-    Points involved: ${complaint.points}
-    Original User (Accused/Doer): ${complaint.user}
-
-    THE DISPUTE:
-    Plaintiff (The one appealing): "${complaint.appeal.plaintiffArg}"
-    Defendant (The original author): "${complaint.appeal.defendantArg}"
-
-    Task:
-    Analyze both sides. Be wise, fair, but also entertaining.
-    If the appeal is valid (e.g., the complaint was unfair, or the good deed was fake), decide to 'cancel' it.
-    If the original activity stands (e.g., the complaint is valid, or the good deed is real), decide to 'keep' it.
-    
-    Call the function 'makeRuling' with your decision.
-  `;
+  if (!complaint.appeal) {
+    throw new Error("Cannot judge a case without appeal data.");
+  }
 
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-preview-09-2025',
-      contents: prompt,
-      config: {
-        tools: [{ functionDeclarations: [rulingTool] }],
-        toolConfig: { functionCallingConfig: { mode: 'ANY' } } // Force tool use
-      }
+    const response = await fetch('/.netlify/functions/gemini', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(complaint),
     });
 
-    const calls = response.functionCalls;
-    if (calls && calls.length > 0) {
-      const args = calls[0].args as any;
-      return {
-        decision: args.decision,
-        explanation: args.explanation
-      };
+    if (!response.ok) {
+      // Try to parse the error response from the function, but fall back to a generic error.
+      try {
+        const errorResult = await response.json();
+        return {
+          decision: errorResult.decision || 'keep',
+          explanation: errorResult.explanation || `The server-judge returned an error: ${response.statusText}`,
+        };
+      } catch (e) {
+        return {
+          decision: 'keep',
+          explanation: `A non-JSON error occurred. The server responded with: ${response.status} ${response.statusText}. The original status stands.`,
+        };
+      }
     }
-    
-    throw new Error("Judge fell asleep (No tool called).");
+
+    const result: JudgeResult = await response.json();
+    return result;
 
   } catch (error) {
-    console.error("Gemini Judge Error:", error);
+    console.error("Error calling the judge function:", error);
     return {
       decision: 'keep',
-      explanation: 'Technical error in the court. The original status stands by default.'
+      explanation: 'A network or client-side error occurred while trying to reach the high court. The original judgment stands by default.'
     };
   }
 };
