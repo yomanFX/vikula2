@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Home } from './pages/Home';
 import { Feed } from './pages/Feed';
@@ -13,6 +13,16 @@ import { ComplaintProvider } from './context/ComplaintContext';
 // Using HashRouter for GitHub Pages compatibility
 const App: React.FC = () => {
   const [isLocked, setIsLocked] = useState(true);
+
+  useEffect(() => {
+    // Check local storage for theme
+    const theme = localStorage.getItem('theme');
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, []);
 
   if (isLocked) {
     return <PinPad onUnlock={() => setIsLocked(false)} />;

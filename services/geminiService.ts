@@ -65,7 +65,7 @@ export const judgeCase = async (complaint: Complaint): Promise<JudgeResult> => {
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-latest',
+      model: 'gemini-2.0-flash',
       contents: "Review the case arguments and issue a ruling immediately.",
       config: {
         systemInstruction: systemInstruction,

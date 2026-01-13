@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { UserType, Complaint, ActivityType, ComplaintStatus, TIERS } from '../types';
 import { updateComplaintStatus, updateComplaint } from '../services/sheetService';
 import { useComplaints } from '../context/ComplaintContext';
+import { SettingsModal } from '../components/SettingsModal';
 
 const Gauge: React.FC<{ score: number }> = ({ score }) => {
   const percentage = Math.min(100, Math.max(0, score / 10)); // 0 to 100
@@ -37,6 +38,7 @@ export const Profile: React.FC = () => {
   // Review Mode State
   const [reviewItem, setReviewItem] = useState<Complaint | null>(null);
   const [reviewPoints, setReviewPoints] = useState(15);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('currentUserIdentity', activeIdentity);
@@ -101,16 +103,23 @@ export const Profile: React.FC = () => {
 
   return (
     <div className="max-w-[480px] mx-auto min-h-screen flex flex-col pb-24 bg-background-light dark:bg-background-dark text-[#111318] dark:text-white transition-colors duration-200 relative pt-safe-top">
-      
+      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+
       {/* Header */}
       <header className="sticky top-0 z-40 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md flex items-center p-4 justify-between border-b border-gray-200 dark:border-gray-800">
-        <div className="text-primary flex size-10 items-center justify-center rounded-full bg-primary/10">
+        <button 
+            onClick={() => setIsSettingsOpen(true)}
+            className="flex size-10 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 active:scale-95 transition-transform"
+        >
           <span className="material-symbols-outlined">settings</span>
-        </div>
+        </button>
         <h2 className="text-lg font-bold leading-tight tracking-tight flex-1 text-center font-display">Профиль</h2>
         <div className="flex w-10 items-center justify-end">
-          <button className="flex size-10 cursor-pointer items-center justify-center rounded-full bg-white dark:bg-gray-800 shadow-sm">
-             <span className="material-symbols-outlined text-gray-600 dark:text-gray-300">notifications</span>
+          <button 
+            onClick={() => refreshData()}
+            className="flex size-10 cursor-pointer items-center justify-center rounded-full bg-white dark:bg-gray-800 shadow-sm active:rotate-180 transition-transform"
+          >
+             <span className="material-symbols-outlined text-gray-600 dark:text-gray-300">refresh</span>
           </button>
         </div>
       </header>
@@ -172,7 +181,7 @@ export const Profile: React.FC = () => {
       {/* SECTION: Incoming Good Deeds (To Approve) */}
       {incomingDeeds.length > 0 && (
           <div className="px-4 pt-2 pb-6 animate-fadeIn">
-            <h3 className="text-lg font-bold leading-tight tracking-tight mb-4 flex items-center gap-2">
+            <h3 className="text-lg font-bold leading-tight tracking-tight mb-4 flex items-center gap-2 dark:text-white">
                 <span className="material-symbols-outlined text-green-500">rate_review</span>
                 На проверке ({incomingDeeds.length})
             </h3>
@@ -204,7 +213,7 @@ export const Profile: React.FC = () => {
 
       {/* SECTION: Pending Complaints (To Pay) */}
       <div className="px-4 pt-2">
-        <h3 className="text-lg font-bold leading-tight tracking-tight mb-4 flex items-center gap-2">
+        <h3 className="text-lg font-bold leading-tight tracking-tight mb-4 flex items-center gap-2 dark:text-white">
             <span className="material-symbols-outlined text-orange-500">warning</span>
             Штрафы и долги
         </h3>
@@ -268,7 +277,7 @@ export const Profile: React.FC = () => {
 
       {/* REVIEW MODAL */}
       {reviewItem && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 pb-24">
               <div className="bg-white dark:bg-gray-900 w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-scaleIn relative overflow-hidden">
                   
                   {/* Close button absolute top right */}
