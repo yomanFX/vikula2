@@ -59,13 +59,38 @@ export const Court: React.FC = () => {
 
     const verdict = await judgeCase(fullComplaint);
 
-    const newStatus = verdict.decision === 'cancel' 
-        ? ComplaintStatus.Annulled 
-        : ComplaintStatus.JudgedValid;
+    // --- New Logic to Handle Detailed Verdicts ---
+    let newStatus: ComplaintStatus;
+    let finalPoints: number;
+    let alertMessage: string;
+
+    switch (verdict.decision) {
+        case 'uphold':
+            newStatus = ComplaintStatus.JudgedValid;
+            finalPoints = c.points;
+            alertMessage = "Жалоба оставлена в силе!";
+            break;
+        case 'reduce':
+            newStatus = ComplaintStatus.JudgedValid; // Still valid, but points adjusted
+            finalPoints = verdict.points;
+            alertMessage = `Штраф снижен до ${finalPoints} баллов!`;
+            break;
+        case 'dismiss':
+            newStatus = ComplaintStatus.Annulled;
+            finalPoints = 0;
+            alertMessage = "Жалоба аннулирована!";
+            break;
+        default: // Includes 'error' case
+            newStatus = c.status; // Keep original status on error
+            finalPoints = c.points;
+            alertMessage = "Произошла ошибка в суде. Статус-кво сохраняется.";
+            break;
+    }
 
     const resolvedComplaint: Complaint = {
         ...fullComplaint,
         status: newStatus,
+        points: finalPoints, // Update the points based on the verdict
         appeal: {
             ...fullComplaint.appeal!,
             isResolved: true,
@@ -77,7 +102,7 @@ export const Court: React.FC = () => {
     setIsJudging(false);
     setActiveCaseId(null);
     await refreshData();
-    alert(`Суд постановил: ${verdict.decision === 'cancel' ? 'ОТМЕНИТЬ' : 'ОСТАВИТЬ'}!`);
+    alert(`Суд постановил: ${alertMessage}`);
   };
 
   return (

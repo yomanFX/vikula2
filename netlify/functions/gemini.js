@@ -1,35 +1,68 @@
 
 const { GoogleGenAI, FunctionDeclaration, Type } = require("@google/genai");
 
-// In Netlify, environment variables are set in the UI or netlify.toml.
-// This is the secure way to handle API keys.
+// Securely access the API key from environment variables set in the Netlify UI.
 const apiKey = process.env.GEMINI_API_KEY;
 
 if (!apiKey) {
+  // This will cause the function to fail safely if the key is not set.
   throw new Error("GEMINI_API_KEY environment variable not set.");
 }
 
 const ai = new GoogleGenAI({ apiKey });
 
-const rulingTool = {
-  name: 'makeRuling',
-  description: 'Issue a final binding judgment on the family dispute.',
+// --- New, More Precise Tools for the AI Judge ---
+
+const upholdTool = {
+  name: 'uphold_complaint',
+  description: 'Uphold the original complaint. The penalty stands as is.',
   parameters: {
     type: Type.OBJECT,
     properties: {
-      decision: {
+      explanation: {
         type: Type.STRING,
-        enum: ['cancel', 'keep'],
-        description: 'Whether to cancel (annul) the activity/complaint or keep it (uphold it).'
+        description: 'A witty, slightly sarcastic, but fair explanation for upholding the complaint.'
+      }
+    },
+    required: ['explanation']
+  }
+};
+
+const reducePenaltyTool = {
+  name: 'reduce_penalty',
+  description: 'The complaint is partially valid, but the penalty is too high. Reduce the penalty points.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      newPenalty: {
+        type: Type.NUMBER,
+        description: 'The new, reduced number of points for the penalty.'
       },
       explanation: {
         type: Type.STRING,
-        description: 'A witty, slightly sarcastic, but fair explanation of the ruling.'
+        description: 'A witty, slightly sarcastic, but fair explanation for reducing the penalty.'
       }
     },
-    required: ['decision', 'explanation']
+    required: ['newPenalty', 'explanation']
   }
 };
+
+const dismissTool = {
+  name: 'dismiss_complaint',
+  description: 'Dismiss the complaint entirely. The appeal is successful, and all points are returned.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      explanation: {
+        type: Type.STRING,
+        description: 'A witty, slightly sarcastic, but fair explanation for dismissing the complaint.'
+      }
+    },
+    required: ['explanation']
+  }
+};
+
+// --- Main Serverless Function Handler ---
 
 exports.handler = async function(event, context) {
   if (event.httpMethod !== 'POST') {
@@ -43,52 +76,77 @@ exports.handler = async function(event, context) {
       return { statusCode: 400, body: JSON.stringify({ error: "Missing appeal data in request body." }) };
     }
 
+    // --- New, More Concise Prompt ---
     const prompt = `
-      You are the "Family Supreme Court Judge" for a couple, Vikulya and Yanik.
-      Your job is to resolve a dispute about a specific "Activity" logged in their relationship app.
+      You are the "Family Supreme Court Judge" for a couple, Vikulya and Yanik, resolving a dispute from their app.
 
-      The Activity:
-      Type: ${complaint.type}
-      Category: ${complaint.category}
-      Description: "${complaint.description}"
-      Points involved: ${complaint.points}
-      Original User (Accused/Doer): ${complaint.user}
+      DISPUTE DETAILS:
+      - Complaint: "${complaint.description}"
+      - Original Penalty: ${complaint.points} points
+      - Plaintiff's Argument (appealing): "${complaint.appeal.plaintiffArg}"
+      - Defendant's Argument (defending complaint): "${complaint.appeal.defendantArg}"
 
-      THE DISPUTE:
-      Plaintiff (The one appealing): "${complaint.appeal.plaintiffArg}"
-      Defendant (The original author): "${complaint.appeal.defendantArg}"
+      YOUR TASK:
+      Analyze the arguments and make a final ruling by calling ONE of the following functions:
+      1. uphold_complaint: If the original complaint is fully justified.
+      2. reduce_penalty: If the complaint has merit, but the penalty is excessive. You must specify the new, lower penalty.
+      3. dismiss_complaint: If the appeal is successful and the complaint was unfair. The penalty is completely removed.
 
-      Task:
-      Analyze both sides. Be wise, fair, but also entertaining.
-      If the appeal is valid (e.g., the complaint was unfair, or the good deed was fake), decide to 'cancel' it.
-      If the original activity stands (e.g., the complaint is valid, or the good deed is real), decide to 'keep' it.
-
-      Call the function 'makeRuling' with your decision.
+      Your explanation should be wise, fair, and slightly entertaining. You MUST call one of the three functions.
     `;
 
+    // --- AI Model Call ---
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-preview-09-2025',
+      model: 'gemini-2.5-flash', // Using the cost-effective model
       contents: prompt,
       config: {
-        tools: [{ functionDeclarations: [rulingTool] }],
-        toolConfig: { functionCallingConfig: { mode: 'ANY' } }
+        tools: [{ functionDeclarations: [upholdTool, reducePenaltyTool, dismissTool] }],
+        toolConfig: { functionCallingConfig: { mode: 'ANY' } } // Force tool use
       }
     });
 
     const calls = response.functionCalls;
     if (calls && calls.length > 0) {
-      const args = calls[0].args;
+      const call = calls[0];
+      const args = call.args;
+      let result;
+
+      // --- Process the AI's Decision ---
+      switch (call.name) {
+        case 'uphold_complaint':
+          result = {
+            decision: 'uphold',
+            explanation: args.explanation,
+            points: complaint.points // Original points
+          };
+          break;
+        case 'reduce_penalty':
+          result = {
+            decision: 'reduce',
+            explanation: args.explanation,
+            points: args.newPenalty // New, reduced points
+          };
+          break;
+        case 'dismiss_complaint':
+          result = {
+            decision: 'dismiss',
+            explanation: args.explanation,
+            points: 0 // Penalty is removed
+          };
+          break;
+        default:
+          throw new Error(`Unknown tool called: ${call.name}`);
+      }
+
       return {
         statusCode: 200,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          decision: args.decision,
-          explanation: args.explanation
-        })
+        body: JSON.stringify(result)
       };
     }
 
-    throw new Error("Judge fell asleep (No tool called).");
+    // Fallback if the AI fails to call a function
+    throw new Error("The judge failed to make a decision (no tool was called).");
 
   } catch (error) {
     console.error("Gemini Judge Error:", error);
@@ -96,7 +154,7 @@ exports.handler = async function(event, context) {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        decision: 'keep',
+        decision: 'error',
         explanation: 'A technical error occurred in the high court. The original judgment stands by default.'
       })
     };
