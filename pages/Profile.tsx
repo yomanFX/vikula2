@@ -268,29 +268,32 @@ export const Profile: React.FC = () => {
 
       {/* REVIEW MODAL */}
       {reviewItem && (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fadeIn">
-              <div className="bg-white dark:bg-gray-900 w-full max-w-md rounded-2xl p-5 shadow-2xl animate-slideUp mb-safe">
-                  <div className="flex justify-between items-center mb-4">
-                      <h3 className="font-bold text-lg dark:text-white">Оценка доброго дела</h3>
-                      <button onClick={() => setReviewItem(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200">
-                          <span className="material-symbols-outlined text-gray-600">close</span>
-                      </button>
-                  </div>
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+              <div className="bg-white dark:bg-gray-900 w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-scaleIn relative overflow-hidden">
+                  
+                  {/* Close button absolute top right */}
+                  <button onClick={() => setReviewItem(null)} className="absolute top-4 right-4 size-8 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center hover:bg-gray-200">
+                      <span className="material-symbols-outlined text-gray-600 dark:text-gray-300">close</span>
+                  </button>
+
+                  <h3 className="font-bold text-xl dark:text-white mb-4 pr-8">Оценка доброго дела</h3>
                   
                   {reviewItem.image && (
-                      <div className="w-full h-48 rounded-xl overflow-hidden mb-4 bg-gray-100 border">
+                      <div className="w-full h-56 rounded-2xl overflow-hidden mb-4 bg-gray-100 border border-gray-100 shadow-inner">
                           <img src={reviewItem.image} className="w-full h-full object-cover" />
                       </div>
                   )}
 
-                  <p className="text-gray-700 dark:text-gray-300 mb-6 text-sm bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
+                  <p className="text-gray-700 dark:text-gray-300 mb-6 text-sm bg-gray-50 dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
                       "{reviewItem.description}"
                   </p>
 
-                  <div className="mb-6">
-                      <div className="flex justify-between mb-2">
+                  <div className="mb-8">
+                      <div className="flex justify-between mb-3 items-end">
                           <span className="text-xs font-bold uppercase text-gray-400">Награда</span>
-                          <span className="text-lg font-black text-primary">+{reviewPoints} баллов</span>
+                          <span className="text-3xl font-black text-primary flex items-center gap-1">
+                            +{reviewPoints} <span className="text-sm font-bold text-gray-400">pts</span>
+                          </span>
                       </div>
                       <input 
                         type="range" 
@@ -301,7 +304,7 @@ export const Profile: React.FC = () => {
                         onChange={(e) => setReviewPoints(Number(e.target.value))}
                         className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
                       />
-                      <div className="flex justify-between text-[10px] text-gray-400 mt-1">
+                      <div className="flex justify-between text-[10px] text-gray-400 mt-2 font-medium">
                           <span>Мелочь (5)</span>
                           <span>Подвиг (100)</span>
                       </div>
@@ -309,9 +312,10 @@ export const Profile: React.FC = () => {
 
                   <button 
                     onClick={handleApproveDeed}
-                    className="w-full h-12 bg-green-500 text-white font-bold rounded-xl shadow-lg shadow-green-500/30 active:scale-95 transition-transform"
+                    className="w-full h-14 bg-green-500 text-white font-bold rounded-2xl shadow-lg shadow-green-500/30 active:scale-95 transition-transform flex items-center justify-center gap-2 text-lg"
                   >
-                      Подтвердить (+{reviewPoints})
+                      Подтвердить
+                      <span className="material-symbols-outlined">check_circle</span>
                   </button>
               </div>
           </div>

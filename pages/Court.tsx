@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { updateComplaint } from '../services/sheetService';
 import { Complaint, ComplaintStatus, UserType, ActivityType } from '../types';
 import { judgeCase } from '../services/geminiService';
@@ -57,27 +57,47 @@ export const Court: React.FC = () => {
         }
     };
 
-    const verdict = await judgeCase(fullComplaint);
+    try {
+        const verdict = await judgeCase(fullComplaint);
+        
+        let newStatus = ComplaintStatus.JudgedValid; // Default: Uphold
+        let finalPoints = c.points;
 
-    const newStatus = verdict.decision === 'cancel' 
-        ? ComplaintStatus.Annulled 
-        : ComplaintStatus.JudgedValid;
-
-    const resolvedComplaint: Complaint = {
-        ...fullComplaint,
-        status: newStatus,
-        appeal: {
-            ...fullComplaint.appeal!,
-            isResolved: true,
-            judgeReasoning: verdict.explanation
+        if (verdict.decision === 'annul') {
+            newStatus = ComplaintStatus.Annulled;
+            finalPoints = 0; // Cancel fine
+        } else if (verdict.decision === 'reduce') {
+            newStatus = ComplaintStatus.JudgedValid; // Still valid, but reduced
+            // Ensure strictly negative or zero, never positive for a complaint reduction
+            finalPoints = verdict.newPoints ? -Math.abs(verdict.newPoints) : Math.ceil(c.points / 2);
         }
-    };
 
-    await updateComplaint(resolvedComplaint);
-    setIsJudging(false);
-    setActiveCaseId(null);
-    await refreshData();
-    alert(`Суд постановил: ${verdict.decision === 'cancel' ? 'ОТМЕНИТЬ' : 'ОСТАВИТЬ'}!`);
+        const resolvedComplaint: Complaint = {
+            ...fullComplaint,
+            status: newStatus,
+            points: finalPoints,
+            appeal: {
+                ...fullComplaint.appeal!,
+                isResolved: true,
+                judgeReasoning: verdict.explanation
+            }
+        };
+
+        await updateComplaint(resolvedComplaint);
+        
+        let message = "";
+        if (verdict.decision === 'annul') message = "Суд ОТМЕНИЛ штраф! 🎉";
+        else if (verdict.decision === 'reduce') message = `Суд СНИЗИЛ штраф до ${finalPoints}! ⚖️`;
+        else message = "Суд ОСТАВИЛ штраф в силе! 🔨";
+
+        alert(message);
+    } catch (e) {
+        alert("Ошибка судьи. Попробуйте позже.");
+    } finally {
+        setIsJudging(false);
+        setActiveCaseId(null);
+        await refreshData();
+    }
   };
 
   return (
@@ -89,7 +109,7 @@ export const Court: React.FC = () => {
              <span className="material-symbols-outlined text-4xl text-indigo-600">gavel</span>
          </div>
          <h1 className="text-2xl font-bold font-display dark:text-white">Семейный Суд</h1>
-         <p className="text-sm text-gray-500">Справедливость на базе AI</p>
+         <p className="text-sm text-gray-500">AI Gemini 2.5 Flash</p>
 
          {/* Identity Toggles for Inputs */}
          <div className="flex justify-center mt-4">

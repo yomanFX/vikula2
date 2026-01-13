@@ -1,69 +1,74 @@
 
 import { GoogleGenAI, FunctionDeclaration, Type } from "@google/genai";
-import { Complaint, AppealData } from "../types";
+import { Complaint } from "../types";
 
-// NOTE: In a real build, this comes from process.env.API_KEY. 
-// Ensuring it is accessed safely.
-const apiKey = process.env.API_KEY || '';
+// User provided API Key
+const apiKey = 'AIzaSyBu2yyFIWH8bLcn4gVdlPFl3XaW2fOar48';
 
 const ai = new GoogleGenAI({ apiKey });
 
+// Define the tool for the judge
 const rulingTool: FunctionDeclaration = {
-  name: 'makeRuling',
-  description: 'Issue a final binding judgment on the family dispute.',
+  name: 'issueRuling',
+  description: 'Issue a binding judgment on the family dispute. You must choose to Uphold the fine, Annul it completely, or Reduce it.',
   parameters: {
     type: Type.OBJECT,
     properties: {
-      decision: {
+      verdict: {
         type: Type.STRING,
-        enum: ['cancel', 'keep'],
-        description: 'Whether to cancel (annul) the activity/complaint or keep it (uphold it).'
+        enum: ['uphold', 'annul', 'reduce'],
+        description: 'UPHOLD: Defendant is guilty, pay full fine. ANNUL: Plaintiff is right, cancel fine. REDUCE: Both wrong/right, lower the fine.'
+      },
+      newPenaltyPoints: {
+        type: Type.INTEGER,
+        description: 'If verdict is REDUCE, this is the new penalty amount (must be negative number, e.g. -50). If UPHOLD or ANNUL, ignore this.',
       },
       explanation: {
         type: Type.STRING,
-        description: 'A witty, slightly sarcastic, but fair explanation of the ruling.'
+        description: 'A witty, slightly sarcastic, short ruling explanation addressed to Vikulya and Yanik.'
       }
     },
-    required: ['decision', 'explanation']
+    required: ['verdict', 'explanation']
   }
 };
 
 export interface JudgeResult {
-  decision: 'cancel' | 'keep';
+  decision: 'uphold' | 'annul' | 'reduce';
+  newPoints?: number;
   explanation: string;
 }
 
 export const judgeCase = async (complaint: Complaint): Promise<JudgeResult> => {
   if (!complaint.appeal) throw new Error("No appeal data");
 
-  const prompt = `
-    You are the "Family Supreme Court Judge" for a couple, Vikulya and Yanik.
-    Your job is to resolve a dispute about a specific "Activity" logged in their relationship app.
+  const systemInstruction = `
+    You are the AI Supreme Court Judge for a couple's relationship app (Vikulya & Yanik).
+    Your goal is fair but entertaining justice.
     
-    The Activity:
-    Type: ${complaint.type}
-    Category: ${complaint.category}
-    Description: "${complaint.description}"
-    Points involved: ${complaint.points}
-    Original User (Accused/Doer): ${complaint.user}
-
+    CONTEXT:
+    - User "${complaint.user}" was accused of: "${complaint.category}" (${complaint.description}).
+    - The current penalty is: ${complaint.points} points.
+    
     THE DISPUTE:
-    Plaintiff (The one appealing): "${complaint.appeal.plaintiffArg}"
-    Defendant (The original author): "${complaint.appeal.defendantArg}"
-
-    Task:
-    Analyze both sides. Be wise, fair, but also entertaining.
-    If the appeal is valid (e.g., the complaint was unfair, or the good deed was fake), decide to 'cancel' it.
-    If the original activity stands (e.g., the complaint is valid, or the good deed is real), decide to 'keep' it.
+    - PLAINTIFF (Appealing the fine): "${complaint.appeal.plaintiffArg}"
+    - DEFENDANT (Wants fine to stick): "${complaint.appeal.defendantArg}"
     
-    Call the function 'makeRuling' with your decision.
+    YOUR JOB:
+    1. Analyze the arguments. Who is making more sense? Is the fine too harsh?
+    2. Call the function 'issueRuling' with one of these decisions:
+       - 'annul': The Plaintiff is totally right. The complaint is bogus. (Points become 0).
+       - 'uphold': The Defendant is right. The Plaintiff is guilty. (Points stay same).
+       - 'reduce': It's complicated. The Plaintiff is guilty but the fine is too high. (Set a new, smaller negative number).
+    
+    Tone: Short, decisive, fair, slightly humorous.
   `;
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-preview-09-2025',
-      contents: prompt,
+      model: 'gemini-2.5-flash-latest',
+      contents: "Review the case arguments and issue a ruling immediately.",
       config: {
+        systemInstruction: systemInstruction,
         tools: [{ functionDeclarations: [rulingTool] }],
         toolConfig: { functionCallingConfig: { mode: 'ANY' } } // Force tool use
       }
@@ -73,18 +78,19 @@ export const judgeCase = async (complaint: Complaint): Promise<JudgeResult> => {
     if (calls && calls.length > 0) {
       const args = calls[0].args as any;
       return {
-        decision: args.decision,
+        decision: args.verdict,
+        newPoints: args.newPenaltyPoints,
         explanation: args.explanation
       };
     }
     
-    throw new Error("Judge fell asleep (No tool called).");
+    throw new Error("Judge refused to issue a formal ruling (Tool not called).");
 
   } catch (error) {
     console.error("Gemini Judge Error:", error);
     return {
-      decision: 'keep',
-      explanation: 'Technical error in the court. The original status stands by default.'
+      decision: 'uphold',
+      explanation: 'System Error: The AI Judge is on coffee break. Appeal rejected by default.'
     };
   }
 };
