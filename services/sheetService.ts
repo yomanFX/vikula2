@@ -17,6 +17,13 @@ const base64ToBlob = (base64: string): Blob => {
   return new Blob([uInt8Array], { type: contentType });
 };
 
+// Helper to sanitize filenames for storage (Cyrillic to ASCII)
+const getUserSlug = (user: UserType) => {
+    if (user === UserType.Vikulya) return 'vikulya';
+    if (user === UserType.Yanik) return 'yanik';
+    return 'unknown';
+};
+
 export const fetchComplaints = async (): Promise<Complaint[]> => {
   try {
     const { data, error } = await supabase
@@ -175,4 +182,42 @@ export const calculateScore = (activities: Complaint[], user: UserType): number 
   });
 
   return Math.max(0, Math.min(1000, score));
+};
+
+// --- AVATAR HANDLING ---
+
+export const uploadAvatar = async (user: UserType, base64Image: string): Promise<string | null> => {
+    try {
+        const blob = base64ToBlob(base64Image);
+        // Use safe ASCII name instead of Cyrillic
+        const fileName = `avatar_${getUserSlug(user)}.jpg`;
+        
+        // Upsert allows overwriting the existing avatar
+        const { error: uploadError } = await supabase.storage
+            .from('complaint-evidence')
+            .upload(fileName, blob, {
+                cacheControl: '0', // No cache to ensure update
+                upsert: true
+            });
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+            .from('complaint-evidence')
+            .getPublicUrl(fileName);
+
+        // Add timestamp to bypass browser cache immediately after upload
+        return `${publicUrl}?t=${Date.now()}`;
+    } catch (error) {
+        console.error("Avatar upload failed:", error);
+        return null;
+    }
+};
+
+export const getAvatarUrl = (user: UserType): string => {
+    const fileName = `avatar_${getUserSlug(user)}.jpg`;
+    const { data: { publicUrl } } = supabase.storage
+        .from('complaint-evidence')
+        .getPublicUrl(fileName);
+    return publicUrl;
 };

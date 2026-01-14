@@ -12,7 +12,8 @@ export enum ActivityType {
 export enum ComplaintStatus {
   Approved = 'APPROVED',
   InProgress = 'IN PROGRESS',
-  Compensated = 'COMPENSATED',
+  PendingConfirmation = 'PENDING_CONFIRMATION', // Accused says it's fixed, waiting for Accuser to close
+  Compensated = 'COMPENSATED', // Final state, closed by Accuser
   Completed = 'COMPLETED',
   PendingApproval = 'PENDING_APPROVAL', // Waiting for the partner to rate it
   // Appeal Statuses

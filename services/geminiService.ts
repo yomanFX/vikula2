@@ -1,11 +1,8 @@
-
 import { GoogleGenAI, FunctionDeclaration, Type } from "@google/genai";
 import { Complaint } from "../types";
 
-// User provided API Key
-const apiKey = 'AIzaSyBu2yyFIWH8bLcn4gVdlPFl3XaW2fOar48';
-
-const ai = new GoogleGenAI({ apiKey });
+// User provided API Key is now properly loaded from environment
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // Define the tool for the judge
 const rulingTool: FunctionDeclaration = {
@@ -25,7 +22,7 @@ const rulingTool: FunctionDeclaration = {
       },
       explanation: {
         type: Type.STRING,
-        description: 'A witty, slightly sarcastic, short ruling explanation addressed to Vikulya and Yanik.'
+        description: 'A witty, slightly sarcastic, short ruling explanation addressed to Vikulya and Yanik in Russian language.'
       }
     },
     required: ['verdict', 'explanation']
@@ -45,6 +42,8 @@ export const judgeCase = async (complaint: Complaint): Promise<JudgeResult> => {
     You are the AI Supreme Court Judge for a couple's relationship app (Vikulya & Yanik).
     Your goal is fair but entertaining justice.
     
+    IMPORTANT: You must respond entirely in RUSSIAN language.
+    
     CONTEXT:
     - User "${complaint.user}" was accused of: "${complaint.category}" (${complaint.description}).
     - The current penalty is: ${complaint.points} points.
@@ -60,12 +59,12 @@ export const judgeCase = async (complaint: Complaint): Promise<JudgeResult> => {
        - 'uphold': The Defendant is right. The Plaintiff is guilty. (Points stay same).
        - 'reduce': It's complicated. The Plaintiff is guilty but the fine is too high. (Set a new, smaller negative number).
     
-    Tone: Short, decisive, fair, slightly humorous.
+    Tone: Short, decisive, fair, slightly humorous, strictly in Russian.
   `;
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-3-flash-preview',
       contents: "Review the case arguments and issue a ruling immediately.",
       config: {
         systemInstruction: systemInstruction,
@@ -90,7 +89,7 @@ export const judgeCase = async (complaint: Complaint): Promise<JudgeResult> => {
     console.error("Gemini Judge Error:", error);
     return {
       decision: 'uphold',
-      explanation: 'System Error: The AI Judge is on coffee break. Appeal rejected by default.'
+      explanation: 'Системная ошибка: Судья ушел на обед. Апелляция отклонена по умолчанию.'
     };
   }
 };

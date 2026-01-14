@@ -22,6 +22,14 @@ const App: React.FC = () => {
     } else {
       document.documentElement.classList.remove('dark');
     }
+
+    // Check local storage for Liquid Glass Mode
+    const isLiquid = localStorage.getItem('liquidMode');
+    if (isLiquid === 'true') {
+        document.documentElement.classList.add('liquid-glass');
+    } else {
+        document.documentElement.classList.remove('liquid-glass');
+    }
   }, []);
 
   if (isLocked) {

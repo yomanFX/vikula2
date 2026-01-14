@@ -1,27 +1,51 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { UserType, Complaint, ActivityType, ComplaintStatus, TIERS } from '../types';
-import { updateComplaintStatus, updateComplaint } from '../services/sheetService';
+import { updateComplaintStatus, updateComplaint, uploadAvatar } from '../services/sheetService';
 import { useComplaints } from '../context/ComplaintContext';
 import { SettingsModal } from '../components/SettingsModal';
+import { compressImage } from '../services/imageService';
 
-const Gauge: React.FC<{ score: number }> = ({ score }) => {
+const GlassGauge: React.FC<{ score: number }> = ({ score }) => {
   const percentage = Math.min(100, Math.max(0, score / 10)); // 0 to 100
-  const rotation = (percentage / 100) * 180; 
+  const circumference = 2 * Math.PI * 45; // r=45
+  const strokeDashoffset = circumference - (percentage / 100) * circumference;
+  
+  // Color determination
+  const color = score >= 800 ? '#4ade80' : score >= 500 ? '#facc15' : '#ef4444';
 
   return (
-    <div className="relative flex flex-col items-center">
-      <div className="gauge-container mb-[-20px]">
-        <div className="gauge-bg"></div>
-        <div 
-            className="gauge-fill" 
-            style={{ transform: `rotate(${rotation}deg)` }}
-        ></div>
-      </div>
-      <div className="flex flex-col items-center z-10">
-        <span className="text-4xl font-black text-primary font-display">{Math.round(score)}</span>
-        <p className="text-[#616f89] dark:text-gray-400 text-sm font-bold uppercase tracking-wider">Ваш рейтинг</p>
+    <div className="relative flex flex-col items-center justify-center size-48">
+      {/* Background Circle */}
+      <svg className="size-full rotate-[-90deg]">
+        <circle
+          cx="50%"
+          cy="50%"
+          r="45"
+          fill="transparent"
+          stroke="currentColor"
+          strokeWidth="8"
+          className="text-gray-200/20"
+        />
+        {/* Progress Circle */}
+        <circle
+          cx="50%"
+          cy="50%"
+          r="45"
+          fill="transparent"
+          stroke={color}
+          strokeWidth="8"
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          strokeLinecap="round"
+          className="transition-all duration-1000 ease-out drop-shadow-lg"
+        />
+      </svg>
+      
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-5xl font-black text-gray-900 dark:text-white drop-shadow-md">{Math.round(score)}</span>
+        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">Рейтинг</span>
       </div>
     </div>
   );
@@ -29,16 +53,17 @@ const Gauge: React.FC<{ score: number }> = ({ score }) => {
 
 export const Profile: React.FC = () => {
   const navigate = useNavigate();
-  const { complaints, refreshData, vikulyaStats, yanikStats } = useComplaints();
+  const { complaints, refreshData, vikulyaStats, yanikStats, avatars, refreshAvatars } = useComplaints();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [activeIdentity, setActiveIdentity] = useState<UserType>(() => {
     return (localStorage.getItem('currentUserIdentity') as UserType) || UserType.Vikulya;
   });
   
-  // Review Mode State
   const [reviewItem, setReviewItem] = useState<Complaint | null>(null);
   const [reviewPoints, setReviewPoints] = useState(15);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('currentUserIdentity', activeIdentity);
@@ -56,276 +81,171 @@ export const Profile: React.FC = () => {
 
   const handleApproveDeed = async () => {
       if (!reviewItem) return;
-      
-      const updatedItem: Complaint = {
-          ...reviewItem,
-          status: ComplaintStatus.Completed,
-          points: reviewPoints
-      };
-      
+      const updatedItem: Complaint = { ...reviewItem, status: ComplaintStatus.Completed, points: reviewPoints };
       setReviewItem(null);
       await updateComplaint(updatedItem);
       refreshData();
   };
 
   const handleStatusUpdate = async (complaintId: string, newStatus: ComplaintStatus) => {
+    if (newStatus === ComplaintStatus.Compensated) {
+        if (!confirm("Вы подтверждаете, что долг полностью погашен?")) return;
+    }
     await updateComplaintStatus(complaintId, newStatus);
     refreshData();
   };
 
-  // 1. Pending Complaints against ME (I need to apologize)
-  const pendingComplaints = complaints.filter(
-    a => a.user === activeIdentity && 
-    a.type === ActivityType.Complaint && 
-    (a.status === ComplaintStatus.InProgress || a.status === ComplaintStatus.Approved)
-  );
-
-  // 2. Good Deeds created by OTHER person waiting for MY approval
-  const incomingDeeds = complaints.filter(
-      a => a.user !== activeIdentity && 
-      a.type === ActivityType.GoodDeed &&
-      a.status === ComplaintStatus.PendingApproval
-  );
-
-  const getTierInfo = (s: number) => {
-      const t = TIERS.slice().reverse().find(t => s >= t.min);
-      const currentTier = t || TIERS[0];
-      const nextTierIndex = TIERS.findIndex(x => x.min === currentTier.min) + 1;
-      const nextTier = TIERS[nextTierIndex];
-      return { 
-          current: currentTier, 
-          nextMin: nextTier ? nextTier.min : 1000 
-      };
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          try {
+              setIsUploading(true);
+              const compressed = await compressImage(file);
+              await uploadAvatar(activeIdentity, compressed);
+              refreshAvatars();
+          } catch (error) { alert("Error uploading"); } finally { setIsUploading(false); }
+      }
   };
 
-  const { current: tier, nextMin } = getTierInfo(score);
-  const progressPercent = Math.min(100, Math.max(0, ((score % 100) / 100) * 100));
+  // Filter Data
+  const pendingComplaints = complaints.filter(a => a.user === activeIdentity && a.type === ActivityType.Complaint && (a.status === ComplaintStatus.InProgress || a.status === ComplaintStatus.Approved));
+  const myClaims = complaints.filter(a => a.user !== activeIdentity && a.type === ActivityType.Complaint && a.status === ComplaintStatus.PendingConfirmation);
+  const incomingDeeds = complaints.filter(a => a.user !== activeIdentity && a.type === ActivityType.GoodDeed && a.status === ComplaintStatus.PendingApproval);
+  
+  const tier = TIERS.slice().reverse().find(t => score >= t.min) || TIERS[0];
 
   return (
-    <div className="max-w-[480px] mx-auto min-h-screen flex flex-col pb-24 bg-background-light dark:bg-background-dark text-[#111318] dark:text-white transition-colors duration-200 relative pt-safe-top">
+    <div className="max-w-md mx-auto min-h-screen pb-28 pt-safe-top">
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
 
-      {/* Header */}
-      <header className="sticky top-0 z-40 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md flex items-center p-4 justify-between border-b border-gray-200 dark:border-gray-800">
-        <button 
-            onClick={() => setIsSettingsOpen(true)}
-            className="flex size-10 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 active:scale-95 transition-transform"
-        >
-          <span className="material-symbols-outlined">settings</span>
+      {/* Glass Header */}
+      <header className="sticky top-0 z-40 px-4 py-3 flex justify-between items-center transition-all duration-300">
+        <button onClick={() => setIsSettingsOpen(true)} className="glass-panel size-10 rounded-full flex items-center justify-center">
+          <span className="material-symbols-outlined text-gray-500">settings</span>
         </button>
-        <h2 className="text-lg font-bold leading-tight tracking-tight flex-1 text-center font-display">Профиль</h2>
-        <div className="flex w-10 items-center justify-end">
-          <button 
-            onClick={() => refreshData()}
-            className="flex size-10 cursor-pointer items-center justify-center rounded-full bg-white dark:bg-gray-800 shadow-sm active:rotate-180 transition-transform"
-          >
-             <span className="material-symbols-outlined text-gray-600 dark:text-gray-300">refresh</span>
-          </button>
+        <div className="glass-panel px-1 p-1 rounded-full flex">
+             <button onClick={() => handleIdentityChange(UserType.Vikulya)} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${activeIdentity === UserType.Vikulya ? 'bg-indigo-500 text-white shadow-lg' : 'text-gray-500'}`}>Викуля</button>
+             <button onClick={() => handleIdentityChange(UserType.Yanik)} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${activeIdentity === UserType.Yanik ? 'bg-orange-500 text-white shadow-lg' : 'text-gray-500'}`}>Яник</button>
         </div>
+        <button onClick={() => refreshData()} className="glass-panel size-10 rounded-full flex items-center justify-center active:rotate-180 transition-transform">
+           <span className="material-symbols-outlined text-gray-500">refresh</span>
+        </button>
       </header>
 
-      {/* Identity Switcher */}
-      <div className="px-4 py-6">
-        <div className="flex h-12 items-center justify-center rounded-xl bg-gray-200 dark:bg-gray-800 p-1.5">
-          <button 
-            onClick={() => handleIdentityChange(UserType.Vikulya)}
-            className={`flex h-full grow items-center justify-center overflow-hidden rounded-lg px-2 transition-all ${activeIdentity === UserType.Vikulya ? 'bg-white dark:bg-gray-700 shadow-sm text-primary' : 'text-gray-500 dark:text-gray-400'}`}
-          >
-            <span className="truncate text-sm font-semibold">Я Викуля</span>
-          </button>
-          <button 
-            onClick={() => handleIdentityChange(UserType.Yanik)}
-            className={`flex h-full grow items-center justify-center overflow-hidden rounded-lg px-2 transition-all ${activeIdentity === UserType.Yanik ? 'bg-white dark:bg-gray-700 shadow-sm text-primary' : 'text-gray-500 dark:text-gray-400'}`}
-          >
-            <span className="truncate text-sm font-semibold">Я Яник</span>
-          </button>
-        </div>
+      {/* Avatar & Score HUD */}
+      <div className="flex flex-col items-center mt-4 mb-6">
+          <div className="relative mb-6" onClick={() => fileInputRef.current?.click()}>
+              <div className="size-28 rounded-full p-1.5 glass-panel shadow-2xl relative z-10">
+                  <img src={avatars[activeIdentity]} className="w-full h-full object-cover rounded-full" />
+              </div>
+              <div className="absolute -bottom-2 -right-2 bg-white dark:bg-slate-700 p-2 rounded-full shadow-lg z-20 cursor-pointer hover:scale-110 transition-transform">
+                   <span className="material-symbols-outlined text-sm">edit</span>
+              </div>
+              {isUploading && <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center z-30"><span className="animate-spin material-symbols-outlined text-white">refresh</span></div>}
+              <input type="file" ref={fileInputRef} onChange={handleAvatarUpload} accept="image/*" className="hidden" />
+          </div>
+
+          <GlassGauge score={score} />
+          
+          <div className="glass-panel mt-4 px-6 py-2 rounded-2xl flex flex-col items-center">
+               <span className={`text-xl font-black ${tier.color} drop-shadow-sm`}>{tier.name}</span>
+               <span className="text-[10px] text-gray-400 italic">"{tier.desc}"</span>
+          </div>
       </div>
 
-      {/* Score Section */}
-      <div className="flex flex-col items-center px-4 py-4 mb-4">
-        <Gauge score={score} />
-        
-        <div className="w-full mt-8 p-4 bg-white dark:bg-gray-900 rounded-xl custom-shadow border border-gray-100 dark:border-gray-800">
-          <div className="flex justify-between items-center mb-2">
-             <div className="flex flex-col">
-                <span className={`text-xl font-bold ${tier.color}`}>{tier.name}</span>
-                <span className="text-xs text-gray-400">Текущий статус</span>
-             </div>
-             <div className="text-right">
-                <span className="text-xs font-bold text-gray-400">Цель: {nextMin}</span>
-             </div>
-          </div>
-          
-          <div className="h-2.5 w-full bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden mb-2">
-            <div className="h-full bg-primary rounded-full transition-all duration-700" style={{ width: `${progressPercent}%` }}></div>
-          </div>
-          
-          <p className="mt-2 text-sm text-[#616f89] dark:text-gray-400 leading-normal italic text-center">
-             "{tier.desc}"
-          </p>
-        </div>
-      </div>
-
-      {/* Action: Add Good Deed */}
-      <div className="px-4 mb-6">
-        <button 
-            onClick={openCreateGoodDeed}
-            className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 h-14 rounded-xl font-bold flex items-center justify-center gap-2 text-green-600 dark:text-green-400 shadow-sm active:scale-95 transition-all"
-        >
-            <span className="material-symbols-outlined">add_a_photo</span>
-            Загрузить Доброе Дело
+      {/* Main Action */}
+      <div className="px-4 mb-8">
+        <button onClick={openCreateGoodDeed} className="w-full glass-panel h-16 rounded-3xl flex items-center justify-center gap-3 active:scale-95 transition-transform hover:bg-white/20 border-2 border-dashed border-gray-300/30">
+            <span className="material-symbols-outlined text-green-500 text-3xl">add_a_photo</span>
+            <span className="font-bold text-gray-700 dark:text-white">Загрузить Доброе Дело</span>
         </button>
       </div>
 
-      {/* SECTION: Incoming Good Deeds (To Approve) */}
-      {incomingDeeds.length > 0 && (
-          <div className="px-4 pt-2 pb-6 animate-fadeIn">
-            <h3 className="text-lg font-bold leading-tight tracking-tight mb-4 flex items-center gap-2 dark:text-white">
-                <span className="material-symbols-outlined text-green-500">rate_review</span>
-                На проверке ({incomingDeeds.length})
-            </h3>
-            <div className="space-y-3">
+      {/* Incoming Tasks Stack */}
+      <div className="px-4 space-y-6">
+          
+          {/* TO APPROVE */}
+          {incomingDeeds.length > 0 && (
+             <div className="space-y-2 animate-fadeIn">
+                <h3 className="text-xs font-bold text-gray-400 uppercase px-2">Требуют оценки</h3>
                 {incomingDeeds.map(deed => (
-                    <div key={deed.id} className="bg-white dark:bg-gray-900 p-4 rounded-xl border border-green-100 dark:border-green-900/30 shadow-sm flex items-center justify-between">
-                         <div className="flex items-center gap-3">
-                             {deed.image && (
-                                 <div className="size-12 rounded-lg bg-gray-100 overflow-hidden shrink-0 border border-gray-200">
-                                     <img src={deed.image} className="w-full h-full object-cover" />
-                                 </div>
-                             )}
-                             <div>
-                                 <p className="font-bold text-gray-900 dark:text-white text-sm">{deed.description}</p>
-                                 <p className="text-xs text-gray-500">{new Date(deed.timestamp).toLocaleDateString()}</p>
-                             </div>
+                    <div key={deed.id} className="glass-panel p-4 flex items-center justify-between">
+                         <div className="flex items-center gap-3 overflow-hidden">
+                             {deed.image && <img src={deed.image} className="size-10 rounded-lg object-cover" />}
+                             <span className="font-bold text-sm truncate">{deed.description}</span>
                          </div>
-                         <button 
-                            onClick={() => setReviewItem(deed)}
-                            className="bg-green-500 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-lg shadow-green-500/30"
-                         >
-                             Оценить
-                         </button>
+                         <button onClick={() => setReviewItem(deed)} className="bg-green-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-lg shadow-green-500/30">Оценить</button>
                     </div>
                 ))}
-            </div>
-          </div>
-      )}
+             </div>
+          )}
 
-      {/* SECTION: Pending Complaints (To Pay) */}
-      <div className="px-4 pt-2">
-        <h3 className="text-lg font-bold leading-tight tracking-tight mb-4 flex items-center gap-2 dark:text-white">
-            <span className="material-symbols-outlined text-orange-500">warning</span>
-            Штрафы и долги
-        </h3>
-        <div className="space-y-4">
+          {/* MY CLAIMS */}
+          {myClaims.length > 0 && (
+             <div className="space-y-2 animate-fadeIn">
+                <h3 className="text-xs font-bold text-gray-400 uppercase px-2">Ждут подтверждения</h3>
+                {myClaims.map(c => (
+                     <div key={c.id} className="glass-panel p-4 border-l-4 border-l-blue-500">
+                        <div className="flex justify-between items-start mb-2">
+                            <span className="font-bold text-sm">{c.description}</span>
+                            <span className="text-xs bg-blue-500/10 text-blue-500 px-2 py-0.5 rounded">Исправлено</span>
+                        </div>
+                        <button onClick={() => handleStatusUpdate(c.id, ComplaintStatus.Compensated)} className="w-full mt-2 py-2 bg-blue-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-blue-500/30">
+                            Подтвердить и Закрыть
+                        </button>
+                     </div>
+                ))}
+             </div>
+          )}
+
+          {/* MY DEBTS */}
+          <div className="space-y-3">
+            <h3 className="text-xs font-bold text-gray-400 uppercase px-2">Мои Долги</h3>
             {pendingComplaints.length === 0 && (
-                <div className="text-center p-6 bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800">
-                     <span className="text-4xl block mb-2">🕊️</span>
-                     <p className="text-gray-400 italic text-sm">Ваша совесть чиста... пока что.</p>
+                <div className="glass-panel p-6 text-center">
+                    <span className="text-2xl">🎉</span>
+                    <p className="text-sm text-gray-500 mt-2">Вы чисты перед законом!</p>
                 </div>
             )}
-            {pendingComplaints.map(complaint => (
-                 <div key={complaint.id} className="bg-white dark:bg-gray-900 p-4 rounded-xl border border-orange-100 dark:border-orange-900/30 custom-shadow">
-                    <div className="flex justify-between items-start mb-3">
+            {pendingComplaints.map(c => (
+                 <div key={c.id} className="glass-panel p-5 relative overflow-hidden">
+                    <div className="flex justify-between items-start mb-2">
                         <div>
-                            <p className="font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                                {complaint.category} 
-                                {complaint.status === ComplaintStatus.Approved && (
-                                    <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">Признано</span>
-                                )}
-                            </p>
-                            <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">{complaint.description}</p>
-                            <div className="flex items-center gap-1 mt-2 text-xs text-orange-600 bg-orange-50 w-fit px-2 py-1 rounded-lg">
-                                <span className="material-symbols-outlined text-sm">{complaint.compensationIcon}</span>
-                                <span className="font-semibold">Штраф: {complaint.compensation}</span>
-                            </div>
+                            <span className="text-xs font-bold text-orange-500 uppercase">{c.category}</span>
+                            <p className="font-bold text-gray-800 dark:text-white leading-tight mt-1">{c.description}</p>
                         </div>
-                        <span className="px-2 py-1 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 text-[10px] font-black rounded uppercase shrink-0">
-                            {complaint.points} б.
-                        </span>
+                        <span className="text-red-500 font-black text-sm">{c.points} pts</span>
+                    </div>
+                    
+                    <div className="bg-orange-500/10 p-2 rounded-xl flex items-center gap-2 mb-4">
+                        <span className="material-symbols-outlined text-orange-500">warning</span>
+                        <span className="text-xs font-bold text-orange-600 dark:text-orange-300">{c.compensation}</span>
                     </div>
 
-                    {/* Image Preview for Complaints */}
-                    {complaint.image && (
-                        <div className="w-full h-32 rounded-lg overflow-hidden border border-gray-100 dark:border-gray-700 mb-3 bg-gray-50">
-                            <img src={complaint.image} alt="proof" className="w-full h-full object-cover" />
-                        </div>
-                    )}
-                    
-                    <div className="flex gap-2">
-                        {complaint.status !== ComplaintStatus.Approved && (
-                            <button 
-                                onClick={() => handleStatusUpdate(complaint.id, ComplaintStatus.Approved)} 
-                                className="flex-1 h-10 rounded-lg border border-gray-200 dark:border-gray-700 text-sm font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex items-center justify-center gap-1"
-                            >
-                                <span className="material-symbols-outlined text-lg">check_small</span>
-                                Принять
-                            </button>
-                        )}
-                        <button 
-                            onClick={() => handleStatusUpdate(complaint.id, ComplaintStatus.Compensated)} 
-                            className="flex-1 h-10 rounded-lg bg-green-500 text-sm font-bold text-white hover:bg-green-600 transition-colors flex items-center justify-center gap-1 shadow-lg shadow-green-500/20"
-                        >
-                            <span className="material-symbols-outlined text-lg">done_all</span>
-                            Исправлено
-                        </button>
+                    <div className="grid grid-cols-2 gap-2">
+                        <button onClick={() => handleStatusUpdate(c.id, ComplaintStatus.PendingAppeal)} className="glass-btn-secondary py-2 rounded-xl text-xs font-bold">Апелляция</button>
+                        <button onClick={() => handleStatusUpdate(c.id, ComplaintStatus.PendingConfirmation)} className="bg-green-500 text-white py-2 rounded-xl text-xs font-bold shadow-lg shadow-green-500/20">Исправлено</button>
                     </div>
                 </div>
             ))}
-        </div>
+          </div>
       </div>
 
-      {/* REVIEW MODAL */}
+      {/* Review Modal */}
       {reviewItem && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 pb-24">
-              <div className="bg-white dark:bg-gray-900 w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-scaleIn relative overflow-hidden">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md px-4">
+              <div className="glass-panel w-full max-w-sm p-6 relative animate-scaleIn">
+                  <button onClick={() => setReviewItem(null)} className="absolute top-4 right-4 size-8 bg-white/10 rounded-full flex items-center justify-center"><span className="material-symbols-outlined text-white">close</span></button>
+                  <h3 className="font-bold text-xl text-gray-900 dark:text-white mb-6">Оценка</h3>
                   
-                  {/* Close button absolute top right */}
-                  <button onClick={() => setReviewItem(null)} className="absolute top-4 right-4 size-8 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center hover:bg-gray-200">
-                      <span className="material-symbols-outlined text-gray-600 dark:text-gray-300">close</span>
-                  </button>
-
-                  <h3 className="font-bold text-xl dark:text-white mb-4 pr-8">Оценка доброго дела</h3>
-                  
-                  {reviewItem.image && (
-                      <div className="w-full h-56 rounded-2xl overflow-hidden mb-4 bg-gray-100 border border-gray-100 shadow-inner">
-                          <img src={reviewItem.image} className="w-full h-full object-cover" />
-                      </div>
-                  )}
-
-                  <p className="text-gray-700 dark:text-gray-300 mb-6 text-sm bg-gray-50 dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
-                      "{reviewItem.description}"
-                  </p>
-
-                  <div className="mb-8">
-                      <div className="flex justify-between mb-3 items-end">
-                          <span className="text-xs font-bold uppercase text-gray-400">Награда</span>
-                          <span className="text-3xl font-black text-primary flex items-center gap-1">
-                            +{reviewPoints} <span className="text-sm font-bold text-gray-400">pts</span>
-                          </span>
-                      </div>
-                      <input 
-                        type="range" 
-                        min="5" 
-                        max="100" 
-                        step="5" 
-                        value={reviewPoints}
-                        onChange={(e) => setReviewPoints(Number(e.target.value))}
-                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
-                      />
-                      <div className="flex justify-between text-[10px] text-gray-400 mt-2 font-medium">
-                          <span>Мелочь (5)</span>
-                          <span>Подвиг (100)</span>
-                      </div>
+                  <div className="flex justify-between items-end mb-4 px-2">
+                      <span className="text-green-500 font-bold text-4xl">+{reviewPoints}</span>
+                      <span className="text-gray-400 text-sm mb-1">баллов</span>
                   </div>
 
-                  <button 
-                    onClick={handleApproveDeed}
-                    className="w-full h-14 bg-green-500 text-white font-bold rounded-2xl shadow-lg shadow-green-500/30 active:scale-95 transition-transform flex items-center justify-center gap-2 text-lg"
-                  >
-                      Подтвердить
-                      <span className="material-symbols-outlined">check_circle</span>
-                  </button>
+                  <input type="range" min="5" max="100" step="5" value={reviewPoints} onChange={(e) => setReviewPoints(Number(e.target.value))} className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-green-400 mb-8" />
+                  
+                  <button onClick={handleApproveDeed} className="w-full py-4 bg-green-500 text-white font-bold rounded-2xl shadow-xl shadow-green-500/40 text-lg">Подтвердить</button>
               </div>
           </div>
       )}

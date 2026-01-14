@@ -1,7 +1,7 @@
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { Complaint, UserType, TIERS } from '../types';
-import { fetchComplaints, calculateScore } from '../services/sheetService';
+import { fetchComplaints, calculateScore, getAvatarUrl } from '../services/sheetService';
 
 interface Stats {
   score: number;
@@ -14,6 +14,8 @@ interface ComplaintContextType {
   refreshData: () => Promise<void>;
   vikulyaStats: Stats;
   yanikStats: Stats;
+  avatars: Record<UserType, string>;
+  refreshAvatars: () => void;
 }
 
 const ComplaintContext = createContext<ComplaintContextType | null>(null);
@@ -33,6 +35,14 @@ export const ComplaintProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [vikulyaStats, setVikulyaStats] = useState<Stats>({ score: 500, tier: TIERS[5] });
   const [yanikStats, setYanikStats] = useState<Stats>({ score: 500, tier: TIERS[5] });
 
+  const [avatars, setAvatars] = useState<Record<UserType, string>>({
+    [UserType.Vikulya]: `https://picsum.photos/seed/${UserType.Vikulya}/200`,
+    [UserType.Yanik]: `https://picsum.photos/seed/${UserType.Yanik}/200`
+  });
+
+  const previousCountRef = useRef(0);
+  const firstLoadRef = useRef(true);
+
   const calculateAndSetStats = (data: Complaint[]) => {
       const vScore = calculateScore(data, UserType.Vikulya);
       const yScore = calculateScore(data, UserType.Yanik);
@@ -48,14 +58,40 @@ export const ComplaintProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       });
   };
 
+  const refreshAvatars = () => {
+     // We append a timestamp in memory to force React to re-render the images
+     // The base URL comes from Supabase
+     const ts = Date.now();
+     setAvatars({
+         [UserType.Vikulya]: `${getAvatarUrl(UserType.Vikulya)}?t=${ts}`,
+         [UserType.Yanik]: `${getAvatarUrl(UserType.Yanik)}?t=${ts}`
+     });
+  };
+
   const refreshData = async () => {
     // Keep loading true only on first load to prevent UI flicker
     if (complaints.length === 0) setLoading(true);
     
     try {
       const data = await fetchComplaints();
+      
+      // Notification Logic
+      if (!firstLoadRef.current && data.length > previousCountRef.current) {
+         if (Notification.permission === 'granted') {
+             const newItem = data[0]; // Assuming sorted by timestamp desc
+             new Notification("Новое событие! 🚨", {
+                 body: `${newItem.user}: ${newItem.category || newItem.description}`,
+                 icon: 'https://cdn-icons-png.flaticon.com/512/2548/2548527.png'
+             });
+         }
+      }
+
       setComplaints(data);
       calculateAndSetStats(data);
+      
+      previousCountRef.current = data.length;
+      firstLoadRef.current = false;
+
     } catch (e) {
       console.error(e);
     } finally {
@@ -65,13 +101,14 @@ export const ComplaintProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   useEffect(() => {
     refreshData();
+    refreshAvatars();
     // Optional: Auto-refresh every 2 minutes
     const interval = setInterval(refreshData, 120000);
     return () => clearInterval(interval);
   }, []);
 
   return (
-    <ComplaintContext.Provider value={{ complaints, loading, refreshData, vikulyaStats, yanikStats }}>
+    <ComplaintContext.Provider value={{ complaints, loading, refreshData, vikulyaStats, yanikStats, avatars, refreshAvatars }}>
       {children}
     </ComplaintContext.Provider>
   );

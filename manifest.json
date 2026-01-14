@@ -1,7 +1,7 @@
 
 {
-  "name": "Система Учета Претензий",
-  "short_name": "СУП",
+  "name": "ВикСуд",
+  "short_name": "ВикСуд",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#f6f6f8",
@@ -19,4 +19,3 @@
     }
   ]
 }
-    

@@ -1,168 +1,106 @@
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LineChart, Line, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, ResponsiveContainer, XAxis, Tooltip } from 'recharts';
 import { UserType, ActivityType } from '../types';
 import { useComplaints } from '../context/ComplaintContext';
 import { SettingsModal } from '../components/SettingsModal';
 
-const ChartData = [
-  { val: 10 }, { val: 12 }, { val: 8 }, { val: 14 }, { val: 11 }, { val: 15 }, { val: 14 }
-];
-
 export const Home: React.FC = () => {
   const navigate = useNavigate();
-  const { complaints, vikulyaStats, yanikStats, loading, refreshData } = useComplaints();
+  const { complaints, vikulyaStats, yanikStats, loading, refreshData, avatars } = useComplaints();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-  // Get first 5 from context
+  const getStartOfWeeklyCycle = () => {
+      const now = new Date();
+      const diff = (now.getDay() + 1) % 7; 
+      const lastSaturday = new Date(now);
+      lastSaturday.setDate(now.getDate() - diff);
+      lastSaturday.setHours(0, 0, 0, 0);
+      return lastSaturday;
+  };
+
+  const startOfWeek = getStartOfWeeklyCycle();
+  const weeklyActivity = complaints.filter(c => new Date(c.timestamp) >= startOfWeek);
+  const weeklyCount = weeklyActivity.length;
+
+  const chartData = ['Сб', 'Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт'].map(d => ({ name: d, good: 0, bad: 0 }));
+  weeklyActivity.forEach(item => {
+      const dayIndex = (new Date(item.timestamp).getDay() + 1) % 7;
+      item.points > 0 ? chartData[dayIndex].good += item.points : chartData[dayIndex].bad += Math.abs(item.points);
+  });
+
   const recentActivity = complaints.slice(0, 5);
+  const handleProfileSelect = (user: UserType) => navigate('/create/step1', { state: { accusedUser: user } });
 
-  const handleProfileSelect = (user: UserType) => {
-    navigate('/create/step1', { state: { accusedUser: user } });
-  };
-
-  const getScoreColor = (score: number) => {
-    if (score >= 800) return 'bg-green-500';
-    if (score >= 500) return 'bg-yellow-500';
-    return 'bg-red-500';
-  };
-
-  const getScoreTextColor = (score: number) => {
-      if (score >= 800) return 'text-green-500';
-      if (score >= 500) return 'text-yellow-600';
-      return 'text-red-500';
-  };
-
-  if (loading) {
-      return (
-          <div className="min-h-screen flex items-center justify-center dark:bg-slate-900">
-              <span className="material-symbols-outlined animate-spin text-primary text-4xl">refresh</span>
-          </div>
-      );
-  }
+  if (loading) return <div className="min-h-screen flex items-center justify-center"><span className="material-symbols-outlined animate-spin text-primary text-4xl">refresh</span></div>;
 
   return (
-    <div className="pb-24 pt-4 px-4 max-w-md mx-auto animate-fadeIn min-h-screen dark:bg-slate-900 transition-colors duration-300">
+    <div className="pb-28 pt-2 px-4 max-w-md mx-auto min-h-screen">
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
       
-      {/* Header */}
-      <header className="flex justify-between items-center mb-6 pt-safe-top">
-        <button 
-            onClick={() => setIsSettingsOpen(true)}
-            className="size-10 bg-gray-100 dark:bg-slate-800 rounded-lg flex items-center justify-center text-gray-600 dark:text-gray-300 active:scale-95 transition-transform"
-        >
-            <span className="material-symbols-outlined">settings</span>
-        </button>
-        <h1 className="text-lg font-bold dark:text-white">СУП</h1>
-        <button 
-            onClick={() => refreshData()}
-            className="size-10 flex items-center justify-center text-gray-400 active:rotate-180 transition-transform"
-        >
-            <span className="material-symbols-outlined">refresh</span>
-        </button>
+      <header className="flex justify-between items-center mb-6 pt-safe-top sticky top-0 z-20 transition-all duration-300">
+        <button onClick={() => setIsSettingsOpen(true)} className="glass-panel size-10 rounded-full flex items-center justify-center active:scale-95 transition-transform"><span className="material-symbols-outlined text-gray-500">settings</span></button>
+        <h1 className="text-2xl font-black tracking-tight dark:text-white text-gray-900 drop-shadow-md">ВикСуд</h1>
+        <button onClick={() => refreshData()} className="glass-panel size-10 rounded-full flex items-center justify-center active:rotate-180 transition-transform"><span className="material-symbols-outlined text-gray-500">refresh</span></button>
       </header>
 
-      {/* KPI Card */}
-      <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-ios mb-8 relative overflow-hidden transition-colors">
-        <div className="flex justify-between items-start mb-2">
+      {/* Hero KPI - Strict Glass */}
+      <div className="glass-panel p-6 mb-8 relative overflow-hidden transition-transform hover:scale-[1.01]">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-primary/30 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
+        <div className="flex justify-between items-end relative z-10">
             <div>
-                <p className="text-gray-500 text-sm font-medium">Претензий за неделю</p>
-                <div className="flex items-baseline gap-2 mt-1">
-                    <span className="text-4xl font-bold text-gray-900 dark:text-white">{recentActivity.filter(x => x.type === ActivityType.Complaint).length}</span>
-                    <span className="text-red-500 text-sm font-bold">Активны</span>
-                </div>
+                <p className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-1">События недели</p>
+                <div className="text-6xl font-black text-gray-900 dark:text-white tracking-tighter drop-shadow-sm">{weeklyCount}</div>
+                <p className="text-[10px] text-gray-500 mt-2 font-bold">Сброс в субботу</p>
             </div>
-            <div className="h-10 w-20">
+            <div className="h-16 w-32">
                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={ChartData}>
-                        <Line type="monotone" dataKey="val" stroke="#2b6cee" strokeWidth={2} dot={false} />
-                    </LineChart>
+                    <BarChart data={chartData}>
+                        <Tooltip cursor={false} contentStyle={{ display: 'none' }} />
+                        <Bar dataKey="good" fill="#4ade80" radius={[4, 4, 4, 4]} barSize={6} stackId="a" />
+                        <Bar dataKey="bad" fill="#f87171" radius={[4, 4, 4, 4]} barSize={6} stackId="a" />
+                    </BarChart>
                 </ResponsiveContainer>
             </div>
         </div>
-        <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-1.5 mt-4">
-            <div className="bg-primary h-1.5 rounded-full" style={{ width: '65%' }}></div>
-        </div>
       </div>
 
-      {/* Profile Selection */}
-      <div className="mb-8">
-        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">Выберите профиль</h2>
-        <p className="text-gray-500 text-sm mb-4">Для инициации процесса обжалования</p>
-        
-        <div className="grid grid-cols-2 gap-4">
-            {/* Vikulya Card */}
-            <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-ios flex flex-col items-center border border-transparent dark:border-slate-700">
-                <div className="size-20 rounded-full bg-indigo-100 mb-3 overflow-hidden border-2 border-white shadow-sm">
-                    <img src="https://picsum.photos/seed/vikulya/200" alt="Vikulya" className="w-full h-full object-cover" />
-                </div>
-                <h3 className="font-bold text-lg dark:text-white">{UserType.Vikulya}</h3>
-                <p className="text-xs text-gray-400 mb-3">Индекс надежности</p>
-                <div className="w-full flex justify-between text-[10px] font-bold mb-1">
-                    <span className={getScoreTextColor(vikulyaStats.score)}>{vikulyaStats.tier.name.toUpperCase()}</span>
-                    <span className={getScoreTextColor(vikulyaStats.score)}>{Math.round(vikulyaStats.score / 10)}%</span>
-                </div>
-                <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-1.5 mb-4 overflow-hidden">
-                    <div className={`h-1.5 rounded-full transition-all duration-1000 ${getScoreColor(vikulyaStats.score)}`} style={{ width: `${vikulyaStats.score / 10}%` }}></div>
-                </div>
-                <button 
-                    onClick={() => handleProfileSelect(UserType.Vikulya)}
-                    className="w-full py-2.5 bg-primary text-white text-sm font-bold rounded-xl active:scale-95 transition-transform shadow-lg shadow-primary/20"
-                >
-                    Жалоба
-                </button>
-            </div>
-
-            {/* Yanik Card */}
-            <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-ios flex flex-col items-center border border-transparent dark:border-slate-700">
-                <div className="size-20 rounded-full bg-orange-100 mb-3 overflow-hidden border-2 border-white shadow-sm">
-                    <img src="https://picsum.photos/seed/yanik/200" alt="Yanik" className="w-full h-full object-cover" />
-                </div>
-                <h3 className="font-bold text-lg dark:text-white">{UserType.Yanik}</h3>
-                <p className="text-xs text-gray-400 mb-3">Индекс надежности</p>
-                <div className="w-full flex justify-between text-[10px] font-bold mb-1">
-                    <span className={getScoreTextColor(yanikStats.score)}>{yanikStats.tier.name.toUpperCase()}</span>
-                    <span className={getScoreTextColor(yanikStats.score)}>{Math.round(yanikStats.score / 10)}%</span>
-                </div>
-                <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-1.5 mb-4 overflow-hidden">
-                    <div className={`h-1.5 rounded-full transition-all duration-1000 ${getScoreColor(yanikStats.score)}`} style={{ width: `${yanikStats.score / 10}%` }}></div>
-                </div>
-                <button 
-                    onClick={() => handleProfileSelect(UserType.Yanik)}
-                    className="w-full py-2.5 bg-primary text-white text-sm font-bold rounded-xl active:scale-95 transition-transform shadow-lg shadow-primary/20"
-                >
-                    Жалоба
-                </button>
-            </div>
-        </div>
-      </div>
-
-      {/* Recent Activity Mini Feed */}
-      <div>
-        <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Последняя активность</h2>
-        <div className="flex flex-col gap-3">
-            {recentActivity.map(item => {
-                const title = item.type === ActivityType.GoodDeed ? item.description : item.category;
-                const isGood = item.points > 0;
-                
-                return (
-                    <div key={item.id} className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-ios flex gap-4 items-center border border-gray-50 dark:border-slate-700">
-                        <div className={`size-12 rounded-lg flex items-center justify-center shrink-0 text-2xl ${isGood ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                            {item.categoryIcon}
-                        </div>
-                        <div className="flex-1">
-                            <h4 className="font-bold text-sm text-gray-900 dark:text-white line-clamp-1">{title}</h4>
-                            <p className="text-xs text-gray-500">
-                                {item.user} • {new Date(item.timestamp).toLocaleDateString()}
-                            </p>
-                        </div>
-                        <span className={`text-xs font-bold whitespace-nowrap ${isGood ? 'text-green-500' : 'text-red-500'}`}>
-                            {isGood ? '+' : ''}{item.points} PTS
-                        </span>
+      {/* Profiles - Strict Glass */}
+      <div className="grid grid-cols-2 gap-4 mb-8">
+          {[UserType.Vikulya, UserType.Yanik].map(user => {
+             const stats = user === UserType.Vikulya ? vikulyaStats : yanikStats;
+             return (
+                <div key={user} onClick={() => handleProfileSelect(user)} className="group glass-panel p-5 flex flex-col items-center cursor-pointer transition-all active:scale-95 relative overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    <div className="size-20 rounded-full p-1 border-2 border-white/20 mb-3 shadow-lg group-hover:scale-110 transition-transform">
+                        <img src={avatars[user]} onError={(e) => { e.currentTarget.src = `https://picsum.photos/seed/${user}/200` }} className="w-full h-full object-cover rounded-full" />
                     </div>
-                );
-            })}
+                    <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-0.5 relative z-10">{user}</h3>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full mb-3 relative z-10 ${stats.score >= 500 ? 'bg-green-500/10 text-green-600 dark:text-green-300' : 'bg-red-500/10 text-red-600 dark:text-red-300'}`}>{Math.round(stats.score/10)}% Надежность</span>
+                    <button className="w-full py-2 glass-btn-secondary text-xs font-bold rounded-xl relative z-10">Пожаловаться</button>
+                </div>
+             );
+          })}
+      </div>
+
+      {/* Recent List - Strict Glass */}
+      <div>
+        <div className="flex justify-between items-center mb-4 px-2">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white">Последнее</h2>
+            <button onClick={() => navigate('/feed')} className="text-xs font-bold text-gray-400 hover:text-primary">Все</button>
+        </div>
+        <div className="flex flex-col gap-3">
+            {recentActivity.map((item, i) => (
+                <div key={item.id} className="glass-panel p-4 flex gap-4 items-center transition-all hover:translate-x-1 duration-300" style={{ animationDelay: `${i * 50}ms` }}>
+                    <div className={`size-12 rounded-xl flex items-center justify-center shrink-0 text-2xl shadow-inner ${item.points > 0 ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>{item.categoryIcon}</div>
+                    <div className="flex-1 min-w-0">
+                        <h4 className="font-bold text-sm text-gray-900 dark:text-white truncate">{item.type === ActivityType.GoodDeed ? item.description : item.category}</h4>
+                        <p className="text-xs text-gray-400 truncate">{item.user} • {new Date(item.timestamp).toLocaleDateString()}</p>
+                    </div>
+                    <span className={`text-sm font-black ${item.points > 0 ? 'text-green-500' : 'text-red-500'}`}>{item.points > 0 ? '+' : ''}{item.points}</span>
+                </div>
+            ))}
         </div>
       </div>
     </div>
