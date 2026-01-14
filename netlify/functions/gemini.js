@@ -91,10 +91,10 @@ exports.handler = async (event) => {
     });
 
     const response = result.response;
-    const functionCall = response.functionCalls && response.functionCalls[0];
+    const functionCalls = response.candidates[0].content.parts.filter(part => part.functionCall);
 
-    if (functionCall) {
-      const { name, args } = functionCall;
+    if (functionCalls && functionCalls.length > 0) {
+      const { name, args } = functionCalls[0].functionCall;
       return {
         statusCode: 200,
         body: JSON.stringify({
