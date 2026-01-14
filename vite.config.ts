@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
-  base: './', // Ensures assets are loaded correctly on GitHub Pages
+  base: '/', // Ensures assets are loaded correctly for standalone PWA
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
