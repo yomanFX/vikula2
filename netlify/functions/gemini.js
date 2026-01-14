@@ -1,4 +1,4 @@
-const { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } = require('@google/generative-ai');
+const { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } = require('@google/genai');
 
 const MODEL_NAME = 'gemini-3-flash-preview';
 const API_KEY = process.env.GEMINI_API_KEY;
