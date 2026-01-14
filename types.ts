@@ -6,7 +6,8 @@ export enum UserType {
 
 export enum ActivityType {
   Complaint = 'COMPLAINT',
-  GoodDeed = 'GOOD_DEED'
+  GoodDeed = 'GOOD_DEED',
+  Purchase = 'PURCHASE'
 }
 
 export enum ComplaintStatus {
@@ -87,4 +88,36 @@ export const COMPENSATIONS = [
   { id: 'apology', label: 'Извинения', icon: 'campaign', color: 'text-blue-600', bg: 'bg-blue-100' },
   { id: 'movie', label: 'Билет в кино', icon: 'local_activity', color: 'text-purple-600', bg: 'bg-purple-100' },
   { id: 'dinner', label: 'Ужин', icon: 'restaurant', color: 'text-green-600', bg: 'bg-green-100' },
+];
+
+// --- SHOP TYPES ---
+
+export type ItemType = 'frame' | 'medal';
+
+export interface ShopItem {
+  id: string;
+  type: ItemType;
+  name: string;
+  description: string;
+  price: number;
+  icon: string; // Used for Medals AND as fallback icon for purchase feed
+  rarity?: 'common' | 'rare' | 'epic' | 'legendary';
+}
+
+export const SHOP_ITEMS: ShopItem[] = [
+  // FRAMES (Now linked to AvatarFrame.tsx logic via ID)
+  { id: 'frame_classic', type: 'frame', name: 'Дерево', description: 'Классика жанра', price: 0, rarity: 'common', icon: '🪵' },
+  { id: 'frame_gold', type: 'frame', name: 'Золотой Дракон', description: 'Роскошь для элиты', price: 150, rarity: 'legendary', icon: '🐉' },
+  { id: 'frame_neon', type: 'frame', name: 'Кибер-Сити', description: 'Будущее уже здесь', price: 100, rarity: 'epic', icon: '🕶️' },
+  { id: 'frame_nature', type: 'frame', name: 'Друид', description: 'Сила природы', price: 75, rarity: 'rare', icon: '🌿' },
+  { id: 'frame_void', type: 'frame', name: 'Бездна', description: 'Тьма смотрит на тебя', price: 200, rarity: 'epic', icon: '🧿' },
+  { id: 'frame_love', type: 'frame', name: 'Амур', description: 'Только любовь', price: 50, rarity: 'rare', icon: '💘' },
+  
+  // MEDALS
+  { id: 'medal_rich', type: 'medal', name: 'Богач', description: 'Потратил кучу баллов', price: 200, icon: '🤑', rarity: 'epic' },
+  { id: 'medal_peace', type: 'medal', name: 'Миротворец', description: 'За закрытые ссоры', price: 100, icon: '🕊️', rarity: 'rare' },
+  { id: 'medal_star', type: 'medal', name: 'Звезда', description: 'Сияешь ярче всех', price: 150, icon: '🌟', rarity: 'legendary' },
+  { id: 'medal_coffee', type: 'medal', name: 'Кофеман', description: 'Спонсор бодрости', price: 50, icon: '☕', rarity: 'common' },
+  { id: 'medal_heart', type: 'medal', name: 'Любимка', description: 'Официально занят(а)', price: 75, icon: '❤️', rarity: 'rare' },
+  { id: 'medal_crown', type: 'medal', name: 'Монарх', description: 'Не подходи', price: 400, icon: '👑', rarity: 'legendary' },
 ];

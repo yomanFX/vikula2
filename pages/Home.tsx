@@ -1,15 +1,36 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, ResponsiveContainer, XAxis, Tooltip } from 'recharts';
-import { UserType, ActivityType } from '../types';
+import { UserType, ActivityType, SHOP_ITEMS } from '../types';
 import { useComplaints } from '../context/ComplaintContext';
 import { SettingsModal } from '../components/SettingsModal';
+import { AvatarFrame } from '../components/AvatarFrame';
 
 export const Home: React.FC = () => {
   const navigate = useNavigate();
   const { complaints, vikulyaStats, yanikStats, loading, refreshData, avatars } = useComplaints();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  
+  // Local state for frames to ensure we catch updates
+  const [equippedFrames, setEquippedFrames] = useState<Record<UserType, string | null>>({
+      [UserType.Vikulya]: null,
+      [UserType.Yanik]: null
+  });
+
+  const loadFrames = () => {
+      setEquippedFrames({
+          [UserType.Vikulya]: localStorage.getItem(`equipped_frame_${UserType.Vikulya}`),
+          [UserType.Yanik]: localStorage.getItem(`equipped_frame_${UserType.Yanik}`)
+      });
+  };
+
+  useEffect(() => {
+      loadFrames();
+      // Listen for frame changes
+      window.addEventListener('storage', loadFrames);
+      return () => window.removeEventListener('storage', loadFrames);
+  }, []);
 
   const getStartOfWeeklyCycle = () => {
       const now = new Date();
@@ -73,9 +94,16 @@ export const Home: React.FC = () => {
              return (
                 <div key={user} onClick={() => handleProfileSelect(user)} className="group glass-panel p-5 flex flex-col items-center cursor-pointer transition-all active:scale-95 relative overflow-hidden">
                     <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                    <div className="size-20 rounded-full p-1 border-2 border-white/20 mb-3 shadow-lg group-hover:scale-110 transition-transform">
-                        <img src={avatars[user]} onError={(e) => { e.currentTarget.src = `https://picsum.photos/seed/${user}/200` }} className="w-full h-full object-cover rounded-full" />
+                    
+                    {/* Avatar Frame Integration */}
+                    <div className="mb-3 transition-transform group-hover:scale-105">
+                         <AvatarFrame 
+                            frameId={equippedFrames[user]} 
+                            src={avatars[user]} 
+                            size="lg" 
+                         />
                     </div>
+
                     <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-0.5 relative z-10">{user}</h3>
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full mb-3 relative z-10 ${stats.score >= 500 ? 'bg-green-500/10 text-green-600 dark:text-green-300' : 'bg-red-500/10 text-red-600 dark:text-red-300'}`}>{Math.round(stats.score/10)}% Надежность</span>
                     <button className="w-full py-2 glass-btn-secondary text-xs font-bold rounded-xl relative z-10">Пожаловаться</button>
@@ -91,16 +119,31 @@ export const Home: React.FC = () => {
             <button onClick={() => navigate('/feed')} className="text-xs font-bold text-gray-400 hover:text-primary">Все</button>
         </div>
         <div className="flex flex-col gap-3">
-            {recentActivity.map((item, i) => (
+            {recentActivity.map((item, i) => {
+                // Determine display text (Map IDs to names for purchases)
+                let title = item.category;
+                let icon = item.categoryIcon;
+                
+                if (item.type === ActivityType.Purchase) {
+                     const shopItem = SHOP_ITEMS.find(s => s.id === item.category);
+                     title = shopItem ? `Куплено: ${shopItem.name}` : `Куплено: ${item.category}`;
+                     icon = shopItem ? shopItem.icon : item.categoryIcon;
+                } else if (item.type === ActivityType.GoodDeed) {
+                     title = item.description;
+                }
+
+                return (
                 <div key={item.id} className="glass-panel p-4 flex gap-4 items-center transition-all hover:translate-x-1 duration-300" style={{ animationDelay: `${i * 50}ms` }}>
-                    <div className={`size-12 rounded-xl flex items-center justify-center shrink-0 text-2xl shadow-inner ${item.points > 0 ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>{item.categoryIcon}</div>
+                    <div className={`size-12 rounded-xl flex items-center justify-center shrink-0 text-2xl shadow-inner ${item.points > 0 ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
+                        {icon}
+                    </div>
                     <div className="flex-1 min-w-0">
-                        <h4 className="font-bold text-sm text-gray-900 dark:text-white truncate">{item.type === ActivityType.GoodDeed ? item.description : item.category}</h4>
+                        <h4 className="font-bold text-sm text-gray-900 dark:text-white truncate">{title}</h4>
                         <p className="text-xs text-gray-400 truncate">{item.user} • {new Date(item.timestamp).toLocaleDateString()}</p>
                     </div>
                     <span className={`text-sm font-black ${item.points > 0 ? 'text-green-500' : 'text-red-500'}`}>{item.points > 0 ? '+' : ''}{item.points}</span>
                 </div>
-            ))}
+            )})}
         </div>
       </div>
     </div>

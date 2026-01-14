@@ -1,10 +1,12 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UserType, Complaint, ActivityType, ComplaintStatus, TIERS } from '../types';
-import { updateComplaintStatus, updateComplaint, uploadAvatar } from '../services/sheetService';
+import { UserType, Complaint, ActivityType, ComplaintStatus, TIERS, SHOP_ITEMS } from '../types';
+import { updateComplaintStatus, updateComplaint, uploadAvatar, getInventory } from '../services/sheetService';
 import { useComplaints } from '../context/ComplaintContext';
 import { SettingsModal } from '../components/SettingsModal';
+import { ShopModal } from '../components/ShopModal';
+import { AvatarFrame } from '../components/AvatarFrame';
 import { compressImage } from '../services/imageService';
 
 const GlassGauge: React.FC<{ score: number }> = ({ score }) => {
@@ -63,11 +65,36 @@ export const Profile: React.FC = () => {
   const [reviewItem, setReviewItem] = useState<Complaint | null>(null);
   const [reviewPoints, setReviewPoints] = useState(15);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isShopOpen, setIsShopOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+
+  // Frame State
+  const [equippedFrameId, setEquippedFrameId] = useState<string | null>(null);
+  const [userMedals, setUserMedals] = useState<string[]>([]);
 
   useEffect(() => {
     localStorage.setItem('currentUserIdentity', activeIdentity);
+    // Load local frame setting
+    const frame = localStorage.getItem(`equipped_frame_${activeIdentity}`);
+    setEquippedFrameId(frame);
   }, [activeIdentity]);
+
+  // Listen for storage changes (shop equipment)
+  useEffect(() => {
+      const handleStorage = () => {
+          setEquippedFrameId(localStorage.getItem(`equipped_frame_${activeIdentity}`));
+      };
+      window.addEventListener('storage', handleStorage);
+      return () => window.removeEventListener('storage', handleStorage);
+  }, [activeIdentity]);
+
+  // Update Medals when complaints load
+  useEffect(() => {
+     const inv = getInventory(complaints, activeIdentity);
+     // Filter only medals
+     const medals = inv.filter(id => id.startsWith('medal_'));
+     setUserMedals(medals);
+  }, [complaints, activeIdentity]);
 
   const score = activeIdentity === UserType.Vikulya ? vikulyaStats.score : yanikStats.score;
 
@@ -113,10 +140,12 @@ export const Profile: React.FC = () => {
   const incomingDeeds = complaints.filter(a => a.user !== activeIdentity && a.type === ActivityType.GoodDeed && a.status === ComplaintStatus.PendingApproval);
   
   const tier = TIERS.slice().reverse().find(t => score >= t.min) || TIERS[0];
+  const activeFrame = SHOP_ITEMS.find(i => i.id === equippedFrameId);
 
   return (
     <div className="max-w-md mx-auto min-h-screen pb-28 pt-safe-top">
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      <ShopModal isOpen={isShopOpen} onClose={() => setIsShopOpen(false)} currentUser={activeIdentity} currentScore={score} />
 
       {/* Glass Header */}
       <header className="sticky top-0 z-40 px-4 py-3 flex justify-between items-center transition-all duration-300">
@@ -127,23 +156,43 @@ export const Profile: React.FC = () => {
              <button onClick={() => handleIdentityChange(UserType.Vikulya)} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${activeIdentity === UserType.Vikulya ? 'bg-indigo-500 text-white shadow-lg' : 'text-gray-500'}`}>Викуля</button>
              <button onClick={() => handleIdentityChange(UserType.Yanik)} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${activeIdentity === UserType.Yanik ? 'bg-orange-500 text-white shadow-lg' : 'text-gray-500'}`}>Яник</button>
         </div>
-        <button onClick={() => refreshData()} className="glass-panel size-10 rounded-full flex items-center justify-center active:rotate-180 transition-transform">
-           <span className="material-symbols-outlined text-gray-500">refresh</span>
+        <button onClick={() => setIsShopOpen(true)} className="glass-panel size-10 rounded-full flex items-center justify-center active:scale-95 transition-transform bg-gradient-to-br from-yellow-400/20 to-orange-500/20 border-yellow-400/30">
+           <span className="text-lg">🛍️</span>
         </button>
       </header>
 
       {/* Avatar & Score HUD */}
-      <div className="flex flex-col items-center mt-4 mb-6">
+      <div className="flex flex-col items-center mt-8 mb-6">
           <div className="relative mb-6" onClick={() => fileInputRef.current?.click()}>
-              <div className="size-28 rounded-full p-1.5 glass-panel shadow-2xl relative z-10">
-                  <img src={avatars[activeIdentity]} className="w-full h-full object-cover rounded-full" />
-              </div>
+              
+              {/* NEW RENDERER */}
+              <AvatarFrame 
+                frameId={equippedFrameId} 
+                src={avatars[activeIdentity]} 
+                size="xl"
+                className="shadow-2xl"
+              />
+              
               <div className="absolute -bottom-2 -right-2 bg-white dark:bg-slate-700 p-2 rounded-full shadow-lg z-20 cursor-pointer hover:scale-110 transition-transform">
                    <span className="material-symbols-outlined text-sm">edit</span>
               </div>
               {isUploading && <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center z-30"><span className="animate-spin material-symbols-outlined text-white">refresh</span></div>}
               <input type="file" ref={fileInputRef} onChange={handleAvatarUpload} accept="image/*" className="hidden" />
           </div>
+
+          {/* Medals Rack */}
+          {userMedals.length > 0 && (
+              <div className="flex gap-2 mb-6 flex-wrap justify-center max-w-[80%] animate-scaleIn bg-black/5 p-2 rounded-xl">
+                  {userMedals.map((mId, i) => {
+                      const medal = SHOP_ITEMS.find(s => s.id === mId);
+                      return (
+                          <div key={i} className="size-8 glass-panel rounded-full flex items-center justify-center text-lg shadow-sm" title={medal?.name}>
+                              {medal?.icon}
+                          </div>
+                      )
+                  })}
+              </div>
+          )}
 
           <GlassGauge score={score} />
           

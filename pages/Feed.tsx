@@ -1,15 +1,35 @@
 
-import React, { useState } from 'react';
-import { ComplaintStatus, UserType, ActivityType } from '../types';
+import React, { useState, useEffect } from 'react';
+import { ComplaintStatus, UserType, ActivityType, SHOP_ITEMS } from '../types';
 import { updateComplaintStatus } from '../services/sheetService';
 import { useComplaints } from '../context/ComplaintContext';
 import { SettingsModal } from '../components/SettingsModal';
+import { AvatarFrame } from '../components/AvatarFrame';
 
 export const Feed: React.FC = () => {
   const { complaints, refreshData, avatars } = useComplaints();
   const [filter, setFilter] = useState<'All' | UserType>('All');
   const [appealingId, setAppealingId] = useState<string | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  
+  // Store frames in state so the feed can render them correctly
+  const [equippedFrames, setEquippedFrames] = useState<Record<UserType, string | null>>({
+      [UserType.Vikulya]: null,
+      [UserType.Yanik]: null
+  });
+
+  const loadFrames = () => {
+      setEquippedFrames({
+          [UserType.Vikulya]: localStorage.getItem(`equipped_frame_${UserType.Vikulya}`),
+          [UserType.Yanik]: localStorage.getItem(`equipped_frame_${UserType.Yanik}`)
+      });
+  };
+
+  useEffect(() => {
+      loadFrames();
+      window.addEventListener('storage', loadFrames);
+      return () => window.removeEventListener('storage', loadFrames);
+  }, []);
 
   const handleAppeal = async (id: string) => {
     if (!confirm("Вы уверены, что хотите подать апелляцию в Суд? Это заморозит дело.")) return;
@@ -123,6 +143,13 @@ export const Feed: React.FC = () => {
                                 && item.status !== ComplaintStatus.PendingApproval
                                 && item.status !== ComplaintStatus.Compensated;
                 
+                // --- Fix Display Logic ---
+                let description = item.description;
+                if (item.type === ActivityType.Purchase) {
+                     const shopItem = SHOP_ITEMS.find(s => s.id === item.category);
+                     description = shopItem ? `Куплено: ${shopItem.name}` : `Куплено: ${item.category}`;
+                }
+
                 return (
                 <div key={item.id} className={`glass-panel p-5 relative overflow-hidden group
                     ${isGoodDeed ? 'border-l-4 border-l-green-400' : ''}
@@ -140,14 +167,16 @@ export const Feed: React.FC = () => {
                     {/* Top Row */}
                     <div className="flex items-start justify-between mb-3 relative z-10">
                         <div className="flex items-center gap-3">
-                            <div className="size-10 rounded-full overflow-hidden border-2 border-white/20 shadow-sm">
-                                <img 
+                            {/* Avatar Frame in Feed */}
+                            <div className="size-10 relative">
+                                <AvatarFrame 
+                                    frameId={equippedFrames[item.user]} 
                                     src={avatars[item.user]} 
-                                    onError={(e) => { e.currentTarget.src = `https://picsum.photos/seed/${item.user}/100` }}
-                                    alt={item.user} 
-                                    className="w-full h-full object-cover" 
+                                    size="sm" 
+                                    className="scale-90"
                                 />
                             </div>
+
                             <div>
                                 <p className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-1">
                                     {item.user}
@@ -168,7 +197,7 @@ export const Feed: React.FC = () => {
                     {/* Content */}
                     <div className="mb-3 relative z-10">
                         <h3 className={`text-base font-bold leading-snug mb-2 text-gray-800 dark:text-gray-100 ${!isGoodDeed && item.status === ComplaintStatus.Compensated ? 'line-through text-gray-400' : ''}`}>
-                            {item.description}
+                            {description}
                         </h3>
                         
                         {item.image && (
