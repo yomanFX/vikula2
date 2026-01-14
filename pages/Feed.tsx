@@ -12,64 +12,95 @@ export const Feed: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const handleAppeal = async (id: string) => {
-    if (!confirm("Начать апелляцию в суде?")) return;
+    if (!confirm("Вы уверены, что хотите подать апелляцию в Суд? Это заморозит дело.")) return;
+
     setAppealingId(id);
     try {
         const success = await updateComplaintStatus(id, ComplaintStatus.PendingAppeal);
-        if (success) await refreshData();
-    } catch (e) { alert("Ошибка"); } finally { setAppealingId(null); }
+        if (success) {
+            await refreshData();
+        } else {
+            alert("Ошибка при подаче апелляции. Проверьте консоль.");
+        }
+    } catch (e) {
+        alert("Произошла непредвиденная ошибка.");
+    } finally {
+        setAppealingId(null);
+    }
   };
 
-  const filteredComplaints = filter === 'All' ? complaints : complaints.filter(c => c.user === filter);
+  const filteredComplaints = filter === 'All' 
+    ? complaints 
+    : complaints.filter(c => c.user === filter);
 
   const getStatusBadge = (status: ComplaintStatus) => {
-    const base = "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider border";
     switch(status) {
-        case ComplaintStatus.Approved: return <span className={`${base} bg-blue-50 border-blue-100 text-blue-700`}>Одобрено</span>;
-        case ComplaintStatus.InProgress: return <span className={`${base} bg-yellow-50 border-yellow-100 text-yellow-700`}>Ожидание</span>;
-        case ComplaintStatus.PendingConfirmation: return <span className={`${base} bg-purple-50 border-purple-100 text-purple-700 animate-pulse`}>Проверка</span>;
-        case ComplaintStatus.Compensated: return <span className={`${base} bg-green-50 border-green-100 text-green-700`}>Закрыто</span>;
-        case ComplaintStatus.PendingAppeal: return <span className={`${base} bg-orange-50 border-orange-100 text-orange-700`}>Суд</span>;
-        case ComplaintStatus.Annulled: return <span className={`${base} bg-gray-100 border-gray-200 text-gray-500`}>Отмена</span>;
-        case ComplaintStatus.JudgedValid: return <span className={`${base} bg-indigo-50 border-indigo-100 text-indigo-700`}>Вердикт</span>;
-        case ComplaintStatus.PendingApproval: return <span className={`${base} bg-cyan-50 border-cyan-100 text-cyan-700`}>На оценке</span>;
+        case ComplaintStatus.Approved:
+            return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-primary/10 text-primary border border-primary/20">Признано</span>;
+        case ComplaintStatus.InProgress:
+            return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-yellow-500/10 text-yellow-600 border border-yellow-500/20">Ожидает</span>;
+        case ComplaintStatus.PendingConfirmation:
+            return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-600 border border-blue-500/20 animate-pulse">Проверка</span>;
+        case ComplaintStatus.Compensated:
+            return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-green-500/10 text-green-600 border border-green-500/20">Закрыто</span>;
+        case ComplaintStatus.PendingAppeal:
+            return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-500/10 text-purple-600 border border-purple-500/20 animate-pulse">В суде</span>;
+        case ComplaintStatus.Annulled:
+            return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-gray-200 text-gray-500 border border-gray-300">Отмена</span>;
+        case ComplaintStatus.JudgedValid:
+             return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-500/10 text-indigo-600 border border-indigo-500/20">Суд OK</span>;
+        case ComplaintStatus.PendingApproval:
+            return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-600 border border-blue-500/20">На проверке</span>;
         default: return null;
     }
   };
 
   return (
-    <div className="max-w-md mx-auto min-h-screen pb-32 pt-safe-top">
+    <div className="max-w-md mx-auto min-h-screen pb-28 pt-safe-top transition-colors duration-300">
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
 
-      <header className="sticky top-0 z-30 px-4 py-4 flex items-center justify-between bg-[#F2F6FC]/95 backdrop-blur-md transition-all">
-            <button onClick={() => setIsSettingsOpen(true)} className="size-12 rounded-full bg-white dark:bg-[#1E1E1E] shadow-sm flex items-center justify-center border border-transparent hover:border-gray-200 transition-all active:scale-95">
-                <span className="material-symbols-rounded text-gray-600">settings</span>
+      {/* Header */}
+      <header className="sticky top-0 z-20 px-4 py-3 flex items-center justify-between">
+            <button 
+                onClick={() => setIsSettingsOpen(true)}
+                className="glass-panel size-10 rounded-full flex items-center justify-center active:scale-95 transition-transform"
+            >
+                <span className="material-symbols-outlined text-gray-600">settings</span>
             </button>
-            <h1 className="text-2xl font-black font-display text-gray-900 dark:text-white">Лента</h1>
-            <button onClick={() => refreshData()} className="size-12 rounded-full bg-white dark:bg-[#1E1E1E] shadow-sm flex items-center justify-center border border-transparent hover:border-gray-200 transition-all active:scale-95">
-                <span className="material-symbols-rounded text-gray-600">refresh</span>
+            <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white drop-shadow-sm">Лента</h1>
+            <button 
+                onClick={() => refreshData()}
+                className="glass-panel size-10 rounded-full flex items-center justify-center active:rotate-180 transition-transform"
+            >
+                <span className="material-symbols-outlined text-gray-600">refresh</span>
             </button>
       </header>
 
       <div className="pt-2">
         {/* Search */}
-        <div className="px-4 mb-6">
-            <div className="relative group">
-                <span className="material-symbols-rounded absolute left-5 top-4 text-gray-400">search</span>
-                <input type="text" placeholder="Поиск по истории..." className="google-input w-full p-4 pl-14 shadow-inner bg-white dark:bg-[#1E1E1E]" />
+        <div className="px-4 mb-4">
+             <div className="relative group">
+                <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                    <span className="material-symbols-outlined text-gray-400">search</span>
+                </div>
+                <input 
+                    type="text" 
+                    placeholder="Поиск по истории..." 
+                    className="glass-input block w-full p-3 pl-10 text-sm outline-none transition-all placeholder-gray-400 focus:ring-2 focus:ring-primary/50"
+                />
             </div>
         </div>
 
         {/* Filters */}
-        <div className="flex gap-3 px-4 mb-8 overflow-x-auto no-scrollbar py-2">
+        <div className="flex gap-2 px-4 mb-4 overflow-x-auto no-scrollbar">
             {['All', UserType.Vikulya, UserType.Yanik].map((f) => (
                 <button 
                     key={f}
                     onClick={() => setFilter(f as any)}
-                    className={`h-10 px-6 rounded-full text-sm font-bold transition-all shadow-sm border
+                    className={`glass-panel h-9 shrink-0 flex items-center justify-center rounded-full px-5 text-sm font-bold transition-all
                         ${filter === f 
-                            ? 'bg-gray-900 text-white border-gray-900 scale-105' 
-                            : 'bg-white dark:bg-[#1E1E1E] text-gray-500 border-gray-100 hover:bg-gray-50'}`}
+                            ? 'bg-primary text-white border-transparent shadow-lg shadow-primary/30' 
+                            : 'text-gray-500 hover:text-gray-900'}`}
                 >
                     {f === 'All' ? 'Все' : f}
                 </button>
@@ -77,8 +108,14 @@ export const Feed: React.FC = () => {
         </div>
 
         {/* List */}
-        <div className="flex flex-col gap-6 px-4">
-            {filteredComplaints.map((item, i) => {
+        <div className="flex flex-col gap-4 px-4">
+            {filteredComplaints.length === 0 && (
+                <div className="glass-panel p-8 rounded-2xl text-center text-gray-400">
+                    <span className="text-4xl block mb-2">🕊️</span>
+                    Нет событий. Тишь да гладь!
+                </div>
+            )}
+            {filteredComplaints.map(item => {
                 const isGoodDeed = item.type === ActivityType.GoodDeed;
                 const canAppeal = item.status !== ComplaintStatus.PendingAppeal 
                                 && item.status !== ComplaintStatus.Annulled 
@@ -87,54 +124,90 @@ export const Feed: React.FC = () => {
                                 && item.status !== ComplaintStatus.Compensated;
                 
                 return (
-                <div key={item.id} className="google-card p-6 animate-slideUp" style={{ animationDelay: `${i * 50}ms` }}>
-                    <div className="flex items-start justify-between mb-4">
-                        <div className="flex items-center gap-4">
-                            <div className="size-12 rounded-full overflow-hidden border-2 border-white shadow-sm">
-                                <img src={avatars[item.user]} className="w-full h-full object-cover" />
+                <div key={item.id} className={`glass-panel p-5 relative overflow-hidden group
+                    ${isGoodDeed ? 'border-l-4 border-l-green-400' : ''}
+                    ${item.status === ComplaintStatus.Compensated || item.status === ComplaintStatus.Annulled ? 'opacity-75 grayscale-[0.3]' : ''}
+                `}>
+                    
+                    {/* Stamps */}
+                    {item.status === ComplaintStatus.JudgedValid && (
+                         <span className="material-symbols-outlined absolute -right-6 -top-2 text-[100px] text-indigo-600/10 rotate-12 pointer-events-none">balance</span>
+                    )}
+                    {item.status === ComplaintStatus.Annulled && (
+                         <span className="material-symbols-outlined absolute -right-6 -top-2 text-[100px] text-gray-500/10 rotate-12 pointer-events-none">cancel</span>
+                    )}
+
+                    {/* Top Row */}
+                    <div className="flex items-start justify-between mb-3 relative z-10">
+                        <div className="flex items-center gap-3">
+                            <div className="size-10 rounded-full overflow-hidden border-2 border-white/20 shadow-sm">
+                                <img 
+                                    src={avatars[item.user]} 
+                                    onError={(e) => { e.currentTarget.src = `https://picsum.photos/seed/${item.user}/100` }}
+                                    alt={item.user} 
+                                    className="w-full h-full object-cover" 
+                                />
                             </div>
                             <div>
-                                <p className="text-base font-black text-gray-900 dark:text-white flex items-center gap-1 font-display">
+                                <p className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-1">
                                     {item.user}
-                                    {isGoodDeed && <span className="material-symbols-rounded text-googleYellow text-base filled">verified</span>}
+                                    {isGoodDeed && <span className="text-[9px] bg-green-500 text-white px-1.5 rounded uppercase tracking-wide">Hero</span>}
                                 </p>
-                                <p className="text-xs text-gray-400 font-bold">{new Date(item.timestamp).toLocaleDateString()}</p>
+                                <p className="text-xs text-gray-500">{new Date(item.timestamp).toLocaleDateString()}</p>
                             </div>
                         </div>
-                        {getStatusBadge(item.status)}
+                        
+                        <div className="flex flex-col items-end gap-1">
+                            {getStatusBadge(item.status)}
+                            <span className={`font-black text-sm whitespace-nowrap ${item.points > 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                {item.points > 0 ? '+' : ''}{item.points} pts
+                            </span>
+                        </div>
                     </div>
                     
-                    <div className="bg-gray-50 dark:bg-[#252525] p-5 rounded-[24px] mb-4 border border-gray-100 dark:border-gray-800">
-                        <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-2 leading-snug font-display">
+                    {/* Content */}
+                    <div className="mb-3 relative z-10">
+                        <h3 className={`text-base font-bold leading-snug mb-2 text-gray-800 dark:text-gray-100 ${!isGoodDeed && item.status === ComplaintStatus.Compensated ? 'line-through text-gray-400' : ''}`}>
                             {item.description}
                         </h3>
-                         <div className={`text-sm font-black flex items-center gap-1 ${item.points > 0 ? 'text-green-600' : 'text-red-500'}`}>
-                            <span className="material-symbols-rounded text-lg">{item.points > 0 ? 'trending_up' : 'trending_down'}</span>
-                            {item.points > 0 ? '+' : ''}{item.points} баллов
-                        </div>
+                        
+                        {item.image && (
+                            <div className="w-full h-40 rounded-xl overflow-hidden border border-white/10 mb-3 shadow-inner">
+                                <img src={item.image} alt="proof" className="w-full h-full object-cover" />
+                            </div>
+                        )}
+                        
+                        {!isGoodDeed && (
+                            <div className="flex items-center gap-2 p-3 rounded-xl bg-gray-50/50 dark:bg-slate-900/30 border border-gray-100/50 dark:border-white/5 mt-3">
+                                 <span className="material-symbols-outlined text-primary text-lg">{item.compensationIcon}</span>
+                                 <p className="text-sm text-gray-600">
+                                    <span className="font-semibold">Штраф:</span> {item.compensation}
+                                 </p>
+                            </div>
+                        )}
                     </div>
 
-                    {item.image && (
-                        <div className="w-full h-56 rounded-[24px] overflow-hidden mb-4 shadow-sm border border-black/5">
-                            <img src={item.image} alt="proof" className="w-full h-full object-cover transform hover:scale-105 transition-transform duration-700" />
-                        </div>
-                    )}
-                    
-                    {!isGoodDeed && (
-                        <div className="flex items-center gap-3 px-2 mt-2">
-                             <div className="size-10 rounded-full bg-orange-50 flex items-center justify-center text-orange-600 shrink-0 border border-orange-100">
-                                <span className="material-symbols-rounded">{item.compensationIcon}</span>
-                             </div>
-                             <p className="text-sm text-gray-600 dark:text-gray-400 font-bold">
-                                Штраф: <span className="text-gray-900 dark:text-white">{item.compensation}</span>
-                             </p>
+                    {item.appeal?.judgeReasoning && (
+                        <div className="mt-3 bg-indigo-500/10 p-3 rounded-xl border border-indigo-500/20 text-xs">
+                            <p className="font-bold text-indigo-500 mb-1 flex items-center gap-1">
+                                <span className="material-symbols-outlined text-sm">gavel</span>
+                                Вердикт:
+                            </p>
+                            <p className="text-indigo-400 italic">"{item.appeal.judgeReasoning}"</p>
                         </div>
                     )}
 
                     {canAppeal && (
-                        <div className="border-t border-gray-100 dark:border-gray-800 mt-5 pt-4 flex justify-end">
-                            <button onClick={() => handleAppeal(item.id)} className="google-btn bg-blue-50 text-blue-600 hover:bg-blue-100 px-5 py-2.5 text-sm">
-                                <span className="material-symbols-rounded text-lg mr-2">gavel</span> Апелляция
+                        <div className="border-t border-gray-200/20 pt-3 flex justify-end">
+                            <button 
+                                onClick={() => handleAppeal(item.id)}
+                                disabled={appealingId === item.id}
+                                className="text-xs font-bold text-gray-400 hover:text-primary flex items-center gap-1 transition-colors px-3 py-1.5 rounded-lg hover:bg-white/10 disabled:opacity-50"
+                            >
+                                <span className={`material-symbols-outlined text-base ${appealingId === item.id ? 'animate-spin' : ''}`}>
+                                    {appealingId === item.id ? 'refresh' : 'balance'}
+                                </span>
+                                Апелляция
                             </button>
                         </div>
                     )}

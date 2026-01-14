@@ -10,7 +10,7 @@ import { CreateComplaint } from './pages/CreateComplaint';
 import { PinPad } from './components/PinPad';
 import { ComplaintProvider } from './context/ComplaintContext';
 
-// Using HashRouter for GitHub Pages/Netlify compatibility without redirects
+// Using HashRouter for GitHub Pages compatibility
 const App: React.FC = () => {
   const [isLocked, setIsLocked] = useState(true);
 
@@ -22,6 +22,14 @@ const App: React.FC = () => {
     } else {
       document.documentElement.classList.remove('dark');
     }
+
+    // Check local storage for Liquid Glass Mode
+    const isLiquid = localStorage.getItem('liquidMode');
+    if (isLiquid === 'true') {
+        document.documentElement.classList.add('liquid-glass');
+    } else {
+        document.documentElement.classList.remove('liquid-glass');
+    }
   }, []);
 
   if (isLocked) {
@@ -31,7 +39,7 @@ const App: React.FC = () => {
   return (
     <ComplaintProvider>
       <Router>
-        <div className="antialiased text-gray-900 bg-background dark:bg-darkBg min-h-screen font-sans">
+        <div className="antialiased text-slate-900 bg-bg min-h-screen">
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/feed" element={<Feed />} />
