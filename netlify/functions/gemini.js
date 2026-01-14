@@ -1,6 +1,6 @@
 const { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } = require('@google/genai');
 
-const MODEL_NAME = 'gemini-3-flash-preview';
+const MODEL_NAME = 'gemini-2.5-flash-lite';
 const API_KEY = process.env.GEMINI_API_KEY;
 
 const genAI = new GoogleGenerativeAI(API_KEY);
@@ -91,13 +91,10 @@ exports.handler = async (event) => {
     });
 
     const response = result.response;
-    // This is a temporary workaround until the Node SDK supports function calling in the same way as the client-side SDK.
-    // We are expecting a function call, but the Node SDK may return it differently.
-    // For now, let's assume the response structure is what we need and parse it.
-    const functionCalls = response.candidates[0].content.parts.filter(part => part.functionCall);
+    const functionCall = response.functionCalls && response.functionCalls[0];
 
-    if (functionCalls && functionCalls.length > 0) {
-      const { name, args } = functionCalls[0].functionCall;
+    if (functionCall) {
+      const { name, args } = functionCall;
       return {
         statusCode: 200,
         body: JSON.stringify({
