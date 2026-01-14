@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { Complaint, UserType, TIERS } from '../types';
 import { fetchComplaints, calculateScore, getAvatarUrl } from '../services/sheetService';
+import { supabase } from '../services/supabase';
 
 interface Stats {
   score: number;
@@ -100,11 +101,28 @@ export const ComplaintProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   };
 
   useEffect(() => {
+    // Initial data fetch
     refreshData();
     refreshAvatars();
-    // Optional: Auto-refresh every 2 minutes
-    const interval = setInterval(refreshData, 120000);
-    return () => clearInterval(interval);
+
+    // Set up Supabase real-time subscription
+    const channel = supabase.channel('database-changes');
+    channel
+      .on('broadcast', { event: 'refresh' }, () => {
+        console.log('Refresh event received!');
+        refreshData();
+        refreshAvatars();
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('Subscribed to real-time updates!');
+        }
+      });
+
+    // Clean up subscription on component unmount
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   return (
