@@ -1,6 +1,6 @@
-const { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } = require('@google/genai');
+const { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold, FunctionDeclaration, Type } = require('@google/genai');
 
-const MODEL_NAME = 'gemini-1.5-flash-latest';
+const MODEL_NAME = 'gemini-3-flash-preview';
 const API_KEY = process.env.GEMINI_API_KEY;
 
 const genAI = new GoogleGenerativeAI(API_KEY);
@@ -16,13 +16,6 @@ exports.handler = async (event) => {
     if (!complaint) {
       return { statusCode: 400, body: 'Bad Request: Missing complaint data' };
     }
-
-    const generationConfig = {
-      temperature: 0.9,
-      topK: 1,
-      topP: 1,
-      maxOutputTokens: 2048,
-    };
 
     const safetySettings = [
       { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
@@ -55,27 +48,23 @@ exports.handler = async (event) => {
     Tone: Short, decisive, fair, slightly humorous, strictly in Russian.
   `;
 
-    const parts = [
-        {text: systemInstruction},
-    ];
-
     const rulingTool = {
       name: 'issueRuling',
       description: 'Issue a binding judgment on the family dispute. You must choose to Uphold the fine, Annul it completely, or Reduce it.',
       parameters: {
-        type: 'OBJECT',
+        type: Type.OBJECT,
         properties: {
           verdict: {
-            type: 'STRING',
+            type: Type.STRING,
             enum: ['uphold', 'annul', 'reduce'],
             description: 'UPHOLD: Defendant is guilty, pay full fine. ANNUL: Plaintiff is right, cancel fine. REDUCE: Both wrong/right, lower the fine.'
           },
           newPenaltyPoints: {
-            type: 'INTEGER',
+            type: Type.INTEGER,
             description: 'If verdict is REDUCE, this is the new penalty amount (must be negative number, e.g. -50). If UPHOLD or ANNUL, ignore this.',
           },
           explanation: {
-            type: 'STRING',
+            type: Type.STRING,
             description: 'A witty, slightly sarcastic, short ruling explanation addressed to Vikulya and Yanik in Russian language.'
           }
         },
@@ -84,17 +73,21 @@ exports.handler = async (event) => {
     };
 
     const result = await model.generateContent({
-      contents: [{ role: "user", parts }],
-      generationConfig,
+      contents: [{ role: "user", parts: [{ text: "Review the case arguments and issue a ruling immediately." }] }],
       safetySettings,
-      tools: [{ functionDeclarations: [rulingTool] }]
+      systemInstruction: {
+        role: "system",
+        parts: [{ text: systemInstruction }],
+      },
+      tools: [{ functionDeclarations: [rulingTool] }],
+      toolConfig: { functionCallingConfig: { mode: 'ANY' } }
     });
 
     const response = result.response;
-    const functionCalls = response.candidates[0].content.parts.filter(part => part.functionCall);
+    const calls = response.functionCalls;
 
-    if (functionCalls && functionCalls.length > 0) {
-      const { name, args } = functionCalls[0].functionCall;
+    if (calls && calls.length > 0) {
+      const args = calls[0].args;
       return {
         statusCode: 200,
         body: JSON.stringify({
