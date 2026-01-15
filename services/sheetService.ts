@@ -1,6 +1,7 @@
 
 import { Complaint, ComplaintStatus, UserType, ActivityType, ShopItem } from '../types';
 import { supabase } from './supabase';
+import { broadcastUpdate } from './broadcastService';
 
 // Helper to convert Base64 to Blob for upload
 const base64ToBlob = (base64: string): Blob => {
@@ -113,6 +114,7 @@ export const submitComplaint = async (complaint: Complaint): Promise<boolean> =>
         throw error;
     }
     
+    broadcastUpdate();
     return true;
   } catch (error) {
     return false; 
@@ -131,6 +133,7 @@ export const updateComplaint = async (complaint: Complaint): Promise<boolean> =>
             .eq('id', complaint.id);
 
         if (error) throw error;
+        broadcastUpdate();
         return true;
 
     } catch (e) {
@@ -157,6 +160,7 @@ export const updateComplaintStatus = async (id: string, newStatus: ComplaintStat
             .eq('id', id);
         
         if (error) throw error;
+        broadcastUpdate();
         return true;
     } catch (e) {
         console.error("Status Update Failed", e);
@@ -238,6 +242,7 @@ export const uploadAvatar = async (user: UserType, base64Image: string): Promise
             .from('complaint-evidence')
             .getPublicUrl(fileName);
 
+        broadcastUpdate();
         return `${publicUrl}?t=${Date.now()}`;
     } catch (error) {
         console.error("Avatar upload failed:", error);
