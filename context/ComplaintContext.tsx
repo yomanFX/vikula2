@@ -15,7 +15,7 @@ interface ComplaintContextType {
   vikulyaStats: Stats;
   yanikStats: Stats;
   avatars: Record<UserType, string>;
-  refreshAvatars: () => void;
+  refreshAvatars: () => Promise<void>;
 }
 
 const ComplaintContext = createContext<ComplaintContextType | null>(null);
@@ -58,14 +58,18 @@ export const ComplaintProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       });
   };
 
-  const refreshAvatars = () => {
-     // We append a timestamp in memory to force React to re-render the images
-     // The base URL comes from Supabase
-     const ts = Date.now();
-     setAvatars({
-         [UserType.Vikulya]: `${getAvatarUrl(UserType.Vikulya)}?t=${ts}`,
-         [UserType.Yanik]: `${getAvatarUrl(UserType.Yanik)}?t=${ts}`
-     });
+  const refreshAvatars = async () => {
+     try {
+         const vUrl = await getAvatarUrl(UserType.Vikulya);
+         const yUrl = await getAvatarUrl(UserType.Yanik);
+         
+         setAvatars(prev => ({
+             [UserType.Vikulya]: vUrl || prev[UserType.Vikulya],
+             [UserType.Yanik]: yUrl || prev[UserType.Yanik]
+         }));
+     } catch (e) {
+         console.error("Failed to load avatars", e);
+     }
   };
 
   const refreshData = async () => {

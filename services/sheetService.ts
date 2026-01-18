@@ -198,9 +198,9 @@ export const buyItem = async (user: UserType, item: ShopItem): Promise<boolean> 
         id: Date.now().toString(),
         user: user,
         type: ActivityType.Purchase,
-        category: item.id, // Storing Item ID in category
+        category: item.id, // Storing Item ID in category for future lookups
         categoryIcon: item.icon,
-        description: `Куплено: ${item.name}`,
+        description: `Куплено: ${item.name}`, // Saving human-readable name directly
         compensation: 'Магазин',
         compensationIcon: 'shopping_cart',
         timestamp: new Date().toISOString(),
@@ -223,32 +223,89 @@ export const getInventory = (activities: Complaint[], user: UserType): string[] 
 export const uploadAvatar = async (user: UserType, base64Image: string): Promise<string | null> => {
     try {
         const blob = base64ToBlob(base64Image);
-        const fileName = `avatar_${getUserSlug(user)}.jpg`;
+        // Use a unique filename (timestamped) to bypass INSERT-only RLS restrictions
+        // We cannot reliably use 'upsert: true' if UPDATE policy is disabled.
+        const slug = getUserSlug(user);
+        const fileName = `avatar_${slug}_${Date.now()}.jpg`;
         
         const { error: uploadError } = await supabase.storage
             .from('complaint-evidence')
             .upload(fileName, blob, {
-                cacheControl: '0', 
-                upsert: true
+                cacheControl: '3600', 
+                upsert: false
             });
 
-        if (uploadError) throw uploadError;
+        if (uploadError) {
+            throw uploadError;
+        }
+
+        // BEST EFFORT CLEANUP: Try to delete old avatars to keep bucket clean.
+        // If RLS prevents DELETE, this will fail silently/log warning, which is acceptable.
+        try {
+            const { data: files } = await supabase.storage
+                .from('complaint-evidence')
+                .list('', { search: `avatar_${slug}_` });
+
+            if (files && files.length > 0) {
+                const oldFiles = files
+                    .filter(f => f.name !== fileName) // Don't delete what we just uploaded
+                    .map(f => f.name);
+                
+                if (oldFiles.length > 0) {
+                    await supabase.storage
+                        .from('complaint-evidence')
+                        .remove(oldFiles);
+                }
+            }
+        } catch (cleanupError) {
+            console.warn("Cleanup of old avatars failed (likely restricted permissions), skipping.", cleanupError);
+        }
 
         const { data: { publicUrl } } = supabase.storage
             .from('complaint-evidence')
             .getPublicUrl(fileName);
 
-        return `${publicUrl}?t=${Date.now()}`;
-    } catch (error) {
-        console.error("Avatar upload failed:", error);
+        return publicUrl;
+
+    } catch (error: any) {
+        console.error("Avatar upload failed:", error?.message || JSON.stringify(error));
         return null;
     }
 };
 
-export const getAvatarUrl = (user: UserType): string => {
-    const fileName = `avatar_${getUserSlug(user)}.jpg`;
-    const { data: { publicUrl } } = supabase.storage
-        .from('complaint-evidence')
-        .getPublicUrl(fileName);
-    return publicUrl;
+export const getAvatarUrl = async (user: UserType): Promise<string | null> => {
+    try {
+        const slug = getUserSlug(user);
+        
+        // Find the latest avatar file
+        const { data, error } = await supabase.storage
+            .from('complaint-evidence')
+            .list('', {
+                limit: 10,
+                search: `avatar_${slug}`, // Matches avatar_vikulya...
+                sortBy: { column: 'created_at', order: 'desc' }
+            });
+            
+        // Fallback to legacy static name if no timestamped files found
+        const legacyName = `avatar_${slug}.jpg`;
+        const legacyUrl = supabase.storage.from('complaint-evidence').getPublicUrl(legacyName).data.publicUrl;
+
+        if (error || !data || data.length === 0) {
+             return legacyUrl;
+        }
+
+        // Ensure we sort by date to get the absolute newest (List order can be flaky)
+        data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        
+        const latestFile = data[0];
+        const { data: publicData } = supabase.storage
+            .from('complaint-evidence')
+            .getPublicUrl(latestFile.name);
+            
+        return publicData.publicUrl;
+
+    } catch (e) {
+        console.warn("Error fetching avatar url", e);
+        return null;
+    }
 };

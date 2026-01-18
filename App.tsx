@@ -15,31 +15,20 @@ const App: React.FC = () => {
   const [isLocked, setIsLocked] = useState(true);
 
   useEffect(() => {
-    // Check local storage for theme
-    const theme = localStorage.getItem('theme');
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-
-    // Check local storage for Liquid Glass Mode
-    const isLiquid = localStorage.getItem('liquidMode');
-    if (isLiquid === 'true') {
-        document.documentElement.classList.add('liquid-glass');
-    } else {
-        document.documentElement.classList.remove('liquid-glass');
-    }
+    console.log("App Mounted. Locked state:", isLocked);
   }, []);
 
   if (isLocked) {
-    return <PinPad onUnlock={() => setIsLocked(false)} />;
+    return <PinPad onUnlock={() => {
+        console.log("Unlocking...");
+        setIsLocked(false);
+    }} />;
   }
 
   return (
     <ComplaintProvider>
       <Router>
-        <div className="antialiased text-slate-900 bg-bg min-h-screen">
+        <div className="antialiased min-h-screen pb-6">
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/feed" element={<Feed />} />

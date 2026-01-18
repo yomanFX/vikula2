@@ -1,7 +1,7 @@
 import { GoogleGenAI, FunctionDeclaration, Type } from "@google/genai";
 import { Complaint } from "../types";
 
-// User provided API Key is now properly loaded from environment
+// The API key must be obtained exclusively from the environment variable process.env.API_KEY.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // Define the tool for the judge
@@ -64,7 +64,7 @@ export const judgeCase = async (complaint: Complaint): Promise<JudgeResult> => {
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3-pro-preview',
       contents: "Review the case arguments and issue a ruling immediately.",
       config: {
         systemInstruction: systemInstruction,
